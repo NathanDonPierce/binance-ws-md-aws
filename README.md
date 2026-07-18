@@ -1,1 +1,1 @@
-# binance-fix-aws
+# binance-ws-md-aws

@@ -4,8 +4,8 @@ data "aws_key_pair" "existing" {
 }
 
 # Security group: SSH only, locked to your IP
-resource "aws_security_group" "fix_client_sg" {
-  name        = "fix-client-sg"
+resource "aws_security_group" "ws_client_sg" {
+  name        = "ws-client-sg"
   description = "Allow SSH from my IP only"
 
   ingress {
@@ -25,18 +25,18 @@ resource "aws_security_group" "fix_client_sg" {
   }
 
   tags = {
-    Name = "fix-client-sg"
+    Name = "ws-client-sg"
   }
 }
 
-resource "aws_instance" "fix_client" {
+resource "aws_instance" "ws_client" {
   count                  = var.instance_count
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = data.aws_key_pair.existing.key_name
-  vpc_security_group_ids = [aws_security_group.fix_client_sg.id]
+  vpc_security_group_ids = [aws_security_group.ws_client_sg.id]
 
   tags = {
-    Name = "fix-client-${count.index}"
+    Name = "ws-client-${count.index}"
   }
 }
