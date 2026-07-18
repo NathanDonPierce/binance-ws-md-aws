@@ -1,0 +1,19 @@
+[Unit]
+Description=Binance market data WebSocket writer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/opt/market-data-writer/src
+Environment=SYMBOL=btcusdt
+Environment=STREAM_TYPE=trade
+Environment=LOG_DIR=/opt/market-data-writer/logs
+ExecStart=/opt/market-data-writer/venv/bin/python3 market_data.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
