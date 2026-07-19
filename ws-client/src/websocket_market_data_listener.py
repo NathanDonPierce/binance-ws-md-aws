@@ -12,7 +12,7 @@ shutdown_event = asyncio.Event()
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Binance market data WebSocket writer")
+    parser = argparse.ArgumentParser(description="Binance market data WebSocket listener")
     parser.add_argument(
         "--symbol",
         default=os.environ.get("SYMBOL", "btcusdt"),
@@ -51,7 +51,7 @@ def create_logger(name, path, fmt, stdout=False):
 def initialize_loggers(symbol, log_dir):
     ops_logger = create_logger(
         "ops",
-        os.path.join(log_dir, "market_data_writer.log"),
+        os.path.join(log_dir, "market_data_listener.log"),
         "%(asctime)s [ops] %(message)s",
         stdout=True,
     )
@@ -104,7 +104,7 @@ async def main():
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: handle_shutdown(ops_logger))
 
-    ops_logger.info(f"Starting market data writer for symbol={symbol}, stream={args.stream_type}")
+    ops_logger.info(f"Starting market data listener for symbol={symbol}, stream={args.stream_type}")
     await consume(ws_url, ops_logger, event_logger)
 
 

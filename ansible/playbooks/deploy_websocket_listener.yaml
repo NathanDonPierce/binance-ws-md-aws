@@ -1,0 +1,100 @@
+---
+- name: Deploy Binance WebSocket market data listener
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    app_dir: /opt/market-data-listener
+    app_user: ec2-user
+    symbol: btcusdt
+    stream_type: trade
+
+  tasks:
+    - name: Ensure application directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      loop:
+        - "{{ app_dir }}"
+        - "{{ app_dir }}/src"
+        - "{{ app_dir }}/logs"
+
+    - name: Copy market data script
+      ansible.builtin.copy:
+        src: ../../ws-client/src/websocket_market_data_listener.py
+        dest: "{{ app_dir }}/src/websocket_market_data_listener.py"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      notify: Restart market data service
+
+    - name: Copy requirements.txt
+      ansible.builtin.copy:
+        src: ../../ws-client/requirements.txt
+        dest: "{{ app_dir }}/requirements.txt"
+        owner: "{{ app_user }}" 
+        group: "{{ app_user }}"
+        mode: '0644'
+
+    - name: Create Python virtual environment
+      ansible.builtin.command: python3 -m venv {{ app_dir }}/venv
+      args:
+        creates: "{{ app_dir }}/venv/bin/python3"
+
+    - name: Install requirements into venv
+      ansible.builtin.pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        virtualenv: "{{ app_dir }}/venv"
+      notify: Restart market data service
+
+    - name: Set SELinux context for logs directory
+      community.general.sefcontext:
+        target: "{{ app_dir }}/logs(/.*)?"
+        setype: var_log_t
+        state: present
+      register: sefcontext_result
+
+    - name: Apply SELinux context
+      ansible.builtin.command: restorecon -Rv {{ app_dir }}/logs
+      when: sefcontext_result.changed
+
+    - name: Deploy systemd unit
+      ansible.builtin.template:
+        src: templates/market-data-listener.service.j2
+        dest: /etc/systemd/system/market-data-listener.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart market data service
+
+    - name: Enable and start market data service
+      ansible.builtin.systemd:
+        name: market-data-listener
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Run for 5 minutes to log snapshot of data
+      ansible.builtin.pause:
+        minutes: 5
+
+    - name: Stop market data service
+      ansible.builtin.systemd:
+        name: market-data-listener
+        state: stopped
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart market data service
+      ansible.builtin.systemd:
+        name: market-data-listener
+        state: restarted
