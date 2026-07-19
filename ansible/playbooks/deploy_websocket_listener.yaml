@@ -11,7 +11,7 @@
     stream_type: trade
 
   tasks:
-    - name: Ensure application directories exist
+    - name: Create application directories
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
@@ -30,7 +30,6 @@
         owner: "{{ app_user }}"
         group: "{{ app_user }}"
         mode: '0755'
-      notify: Restart market data service
 
     - name: Copy requirements.txt
       ansible.builtin.copy:
@@ -49,7 +48,6 @@
       ansible.builtin.pip:
         requirements: "{{ app_dir }}/requirements.txt"
         virtualenv: "{{ app_dir }}/venv"
-      notify: Restart market data service
 
     - name: Set SELinux context for logs directory
       community.general.sefcontext:
@@ -69,9 +67,6 @@
         owner: root
         group: root
         mode: '0644'
-      notify:
-        - Reload systemd
-        - Restart market data service
 
     - name: Enable and start market data service
       ansible.builtin.systemd:
@@ -88,13 +83,3 @@
       ansible.builtin.systemd:
         name: market-data-listener
         state: stopped
-
-  handlers:
-    - name: Reload systemd
-      ansible.builtin.systemd:
-        daemon_reload: true
-
-    - name: Restart market data service
-      ansible.builtin.systemd:
-        name: market-data-listener
-        state: restarted
