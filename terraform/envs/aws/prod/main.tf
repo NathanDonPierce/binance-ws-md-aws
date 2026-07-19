@@ -9,11 +9,11 @@ resource "aws_security_group" "ws_client_sg" {
   description = "Allow SSH from my IP only"
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+    description     = "SSH from Ansible control node"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ansible_control_sg.id]
   }
 
   egress {
