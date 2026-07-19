@@ -34,7 +34,7 @@
       register: node_status
       until: "'Ready' in node_status.stdout"
       retries: 10
-      delay: 5
+      delay: 30
       changed_when: false
 
     - name: Show node status
