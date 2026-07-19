@@ -15,7 +15,3 @@ output "ssh_connection_commands" {
     "ssh -i ~/.ssh/${var.key_pair_name}.pem ${var.ssh_user}@${instance.public_ip}"
   ]
 }
-
-output "ansible_control_sg_id" {
-  value = aws_security_group.ansible_control_sg.id
-}
