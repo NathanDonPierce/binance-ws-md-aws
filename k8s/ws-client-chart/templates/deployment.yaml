@@ -1,0 +1,30 @@
+{{- range .Values.streams }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .symbol }}-{{ .streamType | lower }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .symbol }}-{{ .streamType | lower }}
+  template:
+    metadata:
+      labels:
+        app: {{ .symbol }}-{{ .streamType | lower }}
+    spec:
+      containers:
+        - name: ws-client
+          image: {{ $.Values.image }}
+          envFrom:
+            - configMapRef:
+                name: {{ .symbol }}-{{ .streamType | lower }}-config
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: logs
+          emptyDir: {}
+---
+{{- end }}

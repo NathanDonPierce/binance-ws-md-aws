@@ -44,5 +44,13 @@
     - name: Fetch kubeconfig to control node
       ansible.builtin.fetch:
         src: /etc/rancher/k3s/k3s.yaml
-        dest: "./kubeconfig/{{ inventory_hostname }}.yaml"
+        dest: "{{ playbook_dir }}/../kubeconfig/{{ inventory_hostname }}.yaml"
         flat: true
+
+    - name: Rewrite kubeconfig server address for remote access
+      delegate_to: localhost
+      become: false
+      ansible.builtin.replace:
+        path: "{{ playbook_dir }}/../kubeconfig/{{ inventory_hostname }}.yaml"
+        regexp: 'https://127\.0\.0\.1:6443'
+        replace: "https://{{ private_ip_address }}:6443"

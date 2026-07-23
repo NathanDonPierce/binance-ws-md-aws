@@ -1,0 +1,12 @@
+{{- range .Values.streams }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .symbol }}-{{ .streamType | lower }}-config
+  namespace: {{ $.Values.namespace }}
+data:
+  SYMBOL: "{{ .symbol }}"
+  STREAM_TYPE: "{{ .streamType}}"
+  LOG_DIR: "/app/logs"
+---
+{{- end }}

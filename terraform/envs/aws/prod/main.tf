@@ -79,6 +79,15 @@ resource "aws_security_group" "ws_client_sg" {
     protocol        = "tcp"
     security_groups = [aws_security_group.ansible_control_node_sg.id]
   }
+
+  ingress {
+    description     = "k3s API from Ansible control node"
+    from_port       = 6443
+    to_port         = 6443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ansible_control_node_sg.id]
+  }
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -86,6 +95,7 @@ resource "aws_security_group" "ws_client_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  
   tags = {
     Name    = "ws-client-sg"
     Project = var.project_name

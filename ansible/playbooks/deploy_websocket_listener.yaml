@@ -5,7 +5,7 @@
   gather_facts: false
 
   vars:
-    app_user: ec2-user
+    app_user: listener
     app_dir: /opt/binance-ws
     symbol: btcusdt
     stream_type: trade
@@ -24,6 +24,13 @@
       ansible.builtin.dnf:
         name: python3-packaging
         state: present
+        
+    - name: Create dedicated service account for the market data listener
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        system: true
+        shell: /sbin/nologin
+        create_home: false
 
     - name: Create application directories
       ansible.builtin.file:
@@ -39,7 +46,7 @@
 
     - name: Copy market data script
       ansible.builtin.copy:
-        src: ../../ws-client/src/websocket_market_data_listener.py
+        src: "{{ playbook_dir }}/../../ws-client/src/websocket_market_data_listener.py"
         dest: "{{ app_dir }}/src/websocket_market_data_listener.py"
         owner: "{{ app_user }}"
         group: "{{ app_user }}"
@@ -76,7 +83,7 @@
 
     - name: Deploy systemd unit
       ansible.builtin.template:
-        src: ../../ws-client/systemd/market-data-listener.service.j2
+        src: "{{ playbook_dir }}/../../ws-client/systemd/market-data-listener.service.j2"
         dest: /etc/systemd/system/market-data-listener.service
         owner: root
         group: root

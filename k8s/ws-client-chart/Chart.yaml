@@ -1,0 +1,4 @@
+apiVersion: v2
+name: ws-client
+description: Binance WebSocket market data listener
+version: 0.1.0

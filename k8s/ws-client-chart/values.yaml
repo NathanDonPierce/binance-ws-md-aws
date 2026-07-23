@@ -1,0 +1,12 @@
+image: nathandonpierce/ws-client:latest
+namespace: market-data
+
+streams:
+  - symbol: btcusdt
+    streamType: trade
+  - symbol: btcusdt
+    streamType: depth
+  - symbol: btcusdt
+    streamType: aggTrade 
+  - symbol: btcusdt
+    streamType: bookTicker 
