@@ -1,80 +1,85 @@
 ---
+
 - name: Deploy Binance WebSocket market data listener
+
   hosts: tag_ws_client
+
   become: true
+
   gather_facts: false
 
+
+
   vars:
-    app_dir: /opt/market-data-listener
-    app_user: ec2-user
-    symbol: btcusdt
-    stream_type: trade
+
+
 
   tasks:
+
+    - name: Install Python tooling
+
+      ansible.builtin.dnf:
+
+        name:
+
+          - python3
+
+          - python3-pip
+
+          - policycoreutils-python-utils
+
+        state: present
+
+    - name: Install packaging (required by the ansible.builtin.pip module)
+      ansible.builtin.dnf:
+        name: python3-packaging
+        state: present
+
+
     - name: Create application directories
+
       ansible.builtin.file:
-        path: "{{ item }}"
+
+        owner: "{{ app_user }}" 
+
         state: directory
+
         owner: "{{ app_user }}"
+
         group: "{{ app_user }}"
+
         mode: '0755'
+
       loop:
+
         - "{{ app_dir }}"
+
         - "{{ app_dir }}/src"
+
         - "{{ app_dir }}/logs"
 
+
+
     - name: Copy market data script
+
       ansible.builtin.copy:
+
         src: ../../ws-client/src/websocket_market_data_listener.py
+
         dest: "{{ app_dir }}/src/websocket_market_data_listener.py"
-        owner: "{{ app_user }}"
-        group: "{{ app_user }}"
-        mode: '0755'
-
-    - name: Copy requirements.txt
-      ansible.builtin.copy:
-        src: ../../ws-client/requirements.txt
-        dest: "{{ app_dir }}/requirements.txt"
-        owner: "{{ app_user }}" 
-        group: "{{ app_user }}"
-        mode: '0644'
-
-    - name: Create Python virtual environment
-      ansible.builtin.command: python3 -m venv {{ app_dir }}/venv
-      args:
-        creates: "{{ app_dir }}/venv/bin/python3"
-
-    - name: Install requirements into venv
-      ansible.builtin.pip:
-        requirements: "{{ app_dir }}/requirements.txt"
-        virtualenv: "{{ app_dir }}/venv"
-
-    - name: Set SELinux context for logs directory
-      community.general.sefcontext:
-        target: "{{ app_dir }}/logs(/.*)?"
-        setype: var_log_t
-        state: present
-      register: sefcontext_result
-
-    - name: Apply SELinux context
-      ansible.builtin.command: restorecon -Rv {{ app_dir }}/logs
-      when: sefcontext_result.changed
-
-    - name: Deploy systemd unit
-      ansible.builtin.template:
         src: templates/market-data-listener.service.j2
-        dest: /etc/systemd/system/market-data-listener.service
-        owner: root
-        group: root
-        mode: '0644'
+        owner: "{{ app_user }}"
 
-    - name: Enable and start market data service
-      ansible.builtin.systemd:
-        name: market-data-listener
-        enabled: true
+        group: "{{ app_user }}"
+
+
+      register: script_copy
+
+
+
         state: started
-        daemon_reload: true
 
+      ansible.builtin.copy:
     - name: Run for 5 minutes to log snapshot of data
       ansible.builtin.pause:
         minutes: 5
@@ -83,3 +88,88 @@
       ansible.builtin.systemd:
         name: market-data-listener
         state: stopped
+        src: ../../ws-client/requirements.txt
+
+        dest: "{{ app_dir }}/requirements.txt"
+
+        owner: "{{ app_user }}"
+
+        group: "{{ app_user }}"
+
+        mode: '0644'
+
+
+
+    - name: Create Python virtual environment
+
+      ansible.builtin.command: python3 -m venv {{ app_dir }}/venv
+
+      args:
+
+        creates: "{{ app_dir }}/venv/bin/python3"
+
+
+
+    - name: Install requirements into venv
+
+      ansible.builtin.pip:
+
+        requirements: "{{ app_dir }}/requirements.txt"
+
+        virtualenv: "{{ app_dir }}/venv"
+
+
+
+    - name: Set SELinux context for logs directory
+
+      community.general.sefcontext:
+
+        target: "{{ app_dir }}/logs(/.*)?"
+
+        setype: var_log_t
+
+        state: present
+
+      register: sefcontext_result
+
+
+
+    - name: Apply SELinux context
+
+      ansible.builtin.command: restorecon -Rv {{ app_dir }}/logs
+
+      when: sefcontext_result.changed
+
+
+
+    - name: Deploy systemd unit
+
+      ansible.builtin.template:
+
+        src: ../../ws-client/systemd/market-data-listener.service.j2
+
+        dest: /etc/systemd/system/market-data-listener.service
+
+        owner: root
+
+        group: root
+
+        mode: '0644'
+
+      register: systemd_unit
+
+
+
+    - name: Enable and start market data service
+
+      ansible.builtin.systemd:
+
+        name: market-data-listener
+
+        enabled: true
+
+        state: "{{ 'restarted' if (script_copy.changed or systemd_unit.changed) else 'started' }}"
+
+        daemon_reload: true
+
+

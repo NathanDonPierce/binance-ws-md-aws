@@ -11,6 +11,11 @@
         state: latest
         update_cache: true
 
+    - name: Install packaging
+      ansible.builtin.dnf:
+        name: python3-packaging
+        state: present
+
     - name: Set timezone
       community.general.timezone:
         name: America/New_York
