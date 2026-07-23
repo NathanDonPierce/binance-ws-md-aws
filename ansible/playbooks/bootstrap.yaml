@@ -5,16 +5,40 @@
   gather_facts: true
 
   tasks:
-    - name: Update all packages
-      ansible.builtin.dnf:
-        name: "*"
-        state: latest
-        update_cache: true
 
     - name: Install packaging
       ansible.builtin.dnf:
         name: python3-packaging
         state: present
+    
+    - name: Install extra kernel modules for container networking
+      ansible.builtin.dnf:
+        name: kernel-modules-extra
+        state: present
+      register: kernel_modules_install
+
+    - name: Reboot if kernel modules were just installed
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      when: kernel_modules_install.changed
+
+    - name: Verify required kernel modules are loadable
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - overlay
+        - br_netfilter
+        - vxlan
+
+    - name: Persist kernel modules across reboots
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/k3s.conf
+        content: |
+          overlay
+          br_netfilter
+          vxlan
+        mode: '0644'
 
     - name: Set timezone
       community.general.timezone:
