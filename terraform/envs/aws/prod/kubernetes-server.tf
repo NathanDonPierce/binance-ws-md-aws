@@ -77,10 +77,21 @@ resource "aws_instance" "kubernetes_server" {
   key_name               = data.aws_key_pair.existing.key_name
   vpc_security_group_ids = [aws_security_group.kubernetes_server.id]
   iam_instance_profile   = aws_iam_instance_profile.kubernetes_server_profile.name
+  subnet_id              = data.aws_subnet.default.id
 
   tags = {
     Name    = "kubernetes-server"
     Project = var.project_name
     Role    = "server"
+  }
+}
+
+resource "aws_ssm_parameter" "k3s_server_ip" {
+  name  = "/binance-ws/k3s-server-ip"
+  type  = "String"
+  value = aws_instance.kubernetes_server.private_ip
+
+  tags = {
+    Project = var.project_name
   }
 }

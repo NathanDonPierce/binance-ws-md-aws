@@ -8,7 +8,7 @@ variable "aws_region" {
 variable "server_instance_type" {
   description = "EC2 instance type for the k3s server node"
   type        = string
-  default     = "t3.large"
+  default     = "m7i-flex.large"
 }
 
 variable "agent_instance_type" {
@@ -20,7 +20,7 @@ variable "agent_instance_type" {
 variable "ansible_instance_type" {
   description = "EC2 instance type for ansible control node"
   type        = string
-  default     = "t3.small"
+  default     = "t3.micro"
 }
 
 variable "ssh_user" {

@@ -56,6 +56,7 @@ resource "aws_instance" "ansible_control_node" {
   key_name               = data.aws_key_pair.existing.key_name
   vpc_security_group_ids = [aws_security_group.ansible_control_node_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ansible_control_node_profile.name
+  subnet_id              = data.aws_subnet.default.id
   tags = {
     Name    = "ansible-control"
     Project = var.project_name
