@@ -1,6 +1,6 @@
 ---
 - name: Configure and bootstrap EC2 instances
-  hosts: tag_ws_client
+  hosts: tag_server
   become: true
   gather_facts: true
 

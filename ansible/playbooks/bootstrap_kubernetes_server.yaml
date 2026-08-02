@@ -1,0 +1,89 @@
+---
+- name: Bootstrap k3s server node
+  hosts: tag_server
+  become: true
+  gather_facts: true
+
+  vars:
+    ssm_token_path: /binance-ws/k3s-join-token
+
+  tasks:
+      - name: Get region from instance metadata
+      ansible.builtin.uri:
+        url: http://169.254.169.254/latest/meta-data/placement/region
+        return_content: true
+      register: region_result
+
+    - name: Set region fact
+      ansible.builtin.set_fact:
+        aws_region: "{{ region_result.content }}"
+
+    - name: Install container-selinux (required for k3s under SELinux enforcing)
+      ansible.builtin.dnf:
+        name: container-selinux
+        state: present
+
+    - name: Download k3s install script
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: /tmp/k3s-install.sh
+        mode: '0755'
+
+    - name: Install k3s in server mode
+      ansible.builtin.command: /tmp/k3s-install.sh
+      environment:
+        INSTALL_K3S_EXEC: "server --write-kubeconfig-mode 644 --node-taint node-role=server:NoSchedule"
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Ensure k3s service is running and enabled
+      ansible.builtin.systemd:
+        name: k3s
+        state: started
+        enabled: true
+
+    - name: Wait for node to report Ready
+      ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes
+      register: node_status
+      until: "'Ready' in node_status.stdout"
+      retries: 20
+      delay: 15
+      changed_when: false
+
+    - name: Read the k3s join token
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token_raw
+
+    - name: Write join token to SSM Parameter Store
+      ansible.builtin.command: >-
+        aws ssm put-parameter
+        --name {{ ssm_token_path }}
+        --value "{{ k3s_token_raw.content | b64decode | trim }}"
+        --type SecureString
+        --overwrite
+        --region {{ aws_region }}
+      no_log: true
+      changed_when: true
+
+    - name: Fetch kubeconfig to control node
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ playbook_dir }}/../kubeconfig/{{ inventory_hostname }}.yaml"
+        flat: true
+
+    - name: Rewrite kubeconfig server address for remote access
+      delegate_to: localhost
+      become: false
+      ansible.builtin.replace:
+        path: "{{ playbook_dir }}/../kubeconfig/{{ inventory_hostname }}.yaml"
+        regexp: 'https://127\.0\.0\.1:6443'
+        replace: "https://{{ private_ip_address }}:6443"
+
+    - name: Install AWS CLI v2
+      ansible.builtin.shell: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+        cd /tmp && unzip -o awscliv2.zip
+        /tmp/aws/install --update
+      args:
+        creates: /usr/local/bin/aws
