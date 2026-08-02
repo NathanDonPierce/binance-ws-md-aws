@@ -17,8 +17,8 @@
 
     - name: Install AWS CLI v2
       ansible.builtin.shell: |
-        curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-        cd /tmp && unzip -o -q awscliv2.zip
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+        cd /tmp && unzip -o awscliv2.zip
         /tmp/aws/install --update
       args:
         creates: /usr/local/bin/aws
@@ -72,7 +72,7 @@
 
     - name: Write join token to SSM Parameter Store
       ansible.builtin.command: >-
-        /user/local/bin/aws ssm put-parameter
+        /usr/local/bin/aws ssm put-parameter
         --name {{ ssm_token_path }}
         --value "{{ k3s_token_raw.content | b64decode | trim }}"
         --type SecureString
@@ -94,11 +94,3 @@
         path: "{{ playbook_dir }}/../kubeconfig/{{ inventory_hostname }}.yaml"
         regexp: 'https://127\.0\.0\.1:6443'
         replace: "https://{{ private_ip_address }}:6443"
-
-    - name: Install AWS CLI v2
-      ansible.builtin.shell: |
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-        cd /tmp && unzip -o awscliv2.zip
-        /tmp/aws/install --update
-      args:
-        creates: /usr/local/bin/aws
