@@ -5,8 +5,8 @@ REGION="ap-northeast-1"
 TOKEN_PARAM="/binance-ws/k3s-join-token"
 SERVER_IP_PARAM="/binance-ws/k3s-server-ip"
 
-# --- Kernel modules (same RHEL 10 br_netfilter gap as Phase 0) ---
-dnf install -y kernel-modules-extra
+
+dnf install -y "kernel-modules-extra-$(uname -r)"
 modprobe overlay
 modprobe br_netfilter
 modprobe vxlan
