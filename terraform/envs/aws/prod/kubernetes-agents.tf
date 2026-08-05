@@ -77,6 +77,8 @@ resource "aws_launch_template" "kubernetes_agent" {
   instance_type = var.agent_instance_type
   key_name      = data.aws_key_pair.existing.key_name
 
+  user_data = base64encode(file("${path.module}/agent-user-data.sh"))
+
   vpc_security_group_ids = [aws_security_group.kubernetes_agents.id]
 
   iam_instance_profile {
