@@ -1,6 +1,6 @@
 ---
 - name: Bootstrap k3s server node
-  hosts: tag_server
+  hosts: tag_orchestrator
   become: true
   gather_facts: true
 

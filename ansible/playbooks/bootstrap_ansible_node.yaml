@@ -1,6 +1,6 @@
 ---
 - name: Bootstrap the Ansible control node
-  hosts: tag_ansible_control
+  hosts: tag_ansible
   become: true
   gather_facts: true
 

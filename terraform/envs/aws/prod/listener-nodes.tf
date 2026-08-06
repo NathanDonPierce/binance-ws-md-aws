@@ -1,15 +1,15 @@
-# Kubernetes agents : security group, IAM, launch template, Security Group
+# Listener Nodes : security group, IAM, launch template, Security Group
 
-resource "aws_security_group" "kubernetes_agents" {
-  name        = "kubernetes-agent"
-  description = "kubernetes agents: SSH from control node, VXLAN between agents and to/from server"
+resource "aws_security_group" "listener_nodes" {
+  name        = "listener-node"
+  description = "listener nodes: SSH from control node, VXLAN between agents and to/from server"
 
   ingress {
-    description     = "SSH from Ansible control node"
+    description     = "SSH from Ansible node"
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    security_groups = [aws_security_group.ansible_control_node_sg.id]
+    security_groups = [aws_security_group.ansible_node_sg.id]
   }
 
   ingress {
@@ -29,14 +29,14 @@ resource "aws_security_group" "kubernetes_agents" {
   }
 
   tags = {
-    Name    = "kubernetes-agents-sg"
+    Name    = "listener-nodes-sg"
     Project = var.project_name
   }
 }
 
 # Agent IAM: read-only access to the k3s join token in SSM
-resource "aws_iam_role" "kubernetes_agent_role" {
-  name = "kubernetes-agent-role"
+resource "aws_iam_role" "listener_node_role" {
+  name = "listener-node-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -52,9 +52,9 @@ resource "aws_iam_role" "kubernetes_agent_role" {
   }
 }
 
-resource "aws_iam_role_policy" "kubernetes_agent_ssm_policy" {
+resource "aws_iam_role_policy" "listener_node_ssm_policy" {
   name = "ssm-join-token-read"
-  role = aws_iam_role.kubernetes_agent_role.id
+  role = aws_iam_role.listener_node_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -66,50 +66,50 @@ resource "aws_iam_role_policy" "kubernetes_agent_ssm_policy" {
   })
 }
 
-resource "aws_iam_instance_profile" "kubernetes_agent_profile" {
-  name = "kubernetes-agent-profile"
-  role = aws_iam_role.kubernetes_agent_role.name
+resource "aws_iam_instance_profile" "listener_node_profile" {
+  name = "listener-node-profile"
+  role = aws_iam_role.listener_node_role.name
 }
 
-resource "aws_launch_template" "kubernetes_agent" {
-  name_prefix   = "kubernetes-agent-"
+resource "aws_launch_template" "listener_node" {
+  name_prefix   = "listener-node-"
   image_id      = var.ami_id
   instance_type = var.agent_instance_type
   key_name      = data.aws_key_pair.existing.key_name
 
-  user_data = base64encode(file("${path.module}/agent-user-data.sh"))
+  user_data = base64encode(file("${path.module}/listener-user-data.sh"))
 
-  vpc_security_group_ids = [aws_security_group.kubernetes_agents.id]
+  vpc_security_group_ids = [aws_security_group.listener_nodes.id]
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.kubernetes_agent_profile.name
+    name = aws_iam_instance_profile.listener_node_profile.name
   }
 
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name    = "kubernetes-agent"
+      Name    = "listener-node"
       Project = var.project_name
       Role    = "ws-agent"
     }
   }
 }
 
-resource "aws_autoscaling_group" "kubernetes_agents" {
-  name                = "kubernetes-agents"
+resource "aws_autoscaling_group" "listener_nodes" {
+  name                = "listener-nodes"
   desired_capacity    = var.listener_count
   min_size            = var.listener_count
   max_size            = var.listener_count
   vpc_zone_identifier = [data.aws_subnet.default.id]
 
   launch_template {
-    id      = aws_launch_template.kubernetes_agent.id
+    id      = aws_launch_template.listener_node.id
     version = "$Latest"
   }
 
   tag {
     key                 = "Name"
-    value               = "kubernetes-agent"
+    value               = "listener-node"
     propagate_at_launch = true
   }
 

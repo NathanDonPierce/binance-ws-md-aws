@@ -8,7 +8,7 @@ variable "aws_region" {
 variable "server_instance_type" {
   description = "EC2 instance type for the k3s server node"
   type        = string
-  default     = "m7i-flex.large"
+  default     = "c7i-flex.large"
 }
 
 variable "agent_instance_type" {

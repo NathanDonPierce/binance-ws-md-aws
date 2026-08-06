@@ -1,7 +1,7 @@
 variable "listener_count" {
   description = "Desired number of k3s agent nodes (listeners)"
   type        = number
-  default     = 3
+  default     = 5
 }
 
 variable "key_pair_name" {

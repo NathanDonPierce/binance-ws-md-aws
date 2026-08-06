@@ -1,6 +1,6 @@
 ---
 - name: Configure and bootstrap EC2 instances
-  hosts: tag_server
+  hosts: tag_orchestrator
   become: true
   gather_facts: true
 

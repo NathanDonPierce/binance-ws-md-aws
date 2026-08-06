@@ -1,24 +1,24 @@
-output "ansible_control_node_public_ip" {
-  description = "Public IP of the Ansible control node"
-  value       = aws_instance.ansible_control_node.public_ip
+output "ansible_node_public_ip" {
+  description = "Public IP of the Ansible node"
+  value       = aws_instance.ansible_node.public_ip
 }
 
-output "ansible_control_node_ssh_command" {
-  description = "SSH command to reach the control node from your laptop"
-  value       = "ssh -i ~/.ssh/${var.key_pair_name}.pem ${var.ssh_user}@${aws_instance.ansible_control_node.public_ip}"
+output "ansible_node_ssh_command" {
+  description = "SSH command to reach the ansible node from your laptop"
+  value       = "ssh -i ~/.ssh/${var.key_pair_name}.pem ${var.ssh_user}@${aws_instance.ansible_node.public_ip}"
 }
 
-output "kubernetes_server_public_ip" {
-  description = "Public IP of the kubernetes server node (not directly reachable — only via the Ansible control node)"
-  value       = aws_instance.kubernetes_server.public_ip
+output "orchestrator_public_ip" {
+  description = "Public IP of the orchestrator node (not directly reachable — only via the Ansible node)"
+  value       = aws_instance.orchestrator.public_ip
 }
 
-output "kubernetes_server_id" {
-  description = "Instance ID of the kubernetes server node"
-  value       = aws_instance.kubernetes_server.id
+output "orchestrator_id" {
+  description = "Instance ID of the orchestrator node"
+  value       = aws_instance.orchestrator.id
 }
 
-output "kubernetes_agent_asg_name" {
-  description = "Name of the kubernetes agent Auto Scaling Group"
-  value       = aws_autoscaling_group.kubernetes_agents.name
+output "listener_node_asg_name" {
+  description = "Name of the listener nodes Auto Scaling Group"
+  value       = aws_autoscaling_group.listener_nodes.name
 }
