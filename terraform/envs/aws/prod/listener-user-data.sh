@@ -32,3 +32,4 @@ SERVER_IP=$("$AWS" ssm get-parameter --name "$SERVER_IP_PARAM" --region "$REGION
 
 # --- Install k3s in agent mode, joining the server ---
 curl -sfL https://get.k3s.io | K3S_URL="https://${SERVER_IP}:6443" K3S_TOKEN="${TOKEN}" sh -
+curl -sfL https://get.k3s.io | K3S_URL="https://${SERVER_IP}:6443" K3S_TOKEN="${TOKEN}" INSTALL_K3S_EXEC="agent --node-label role=listener" sh -
