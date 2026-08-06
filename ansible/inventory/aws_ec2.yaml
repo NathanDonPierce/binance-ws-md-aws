@@ -10,4 +10,4 @@ keyed_groups:
   - key: tags.Role
     prefix: tag
 compose:
-  ansible_host: "(ec2_tags.Role == 'control-node') | ternary(public_ip_address, private_ip_address)"
+  ansible_host: "(ec2_tags.Role == 'ansible-node') | ternary(public_ip_address, private_ip_address)"
