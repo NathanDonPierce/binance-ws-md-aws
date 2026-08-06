@@ -120,9 +120,10 @@
         "iam:PassRole"
       ],
       "Resource": [
-        "arn:aws:iam::626928146778:role/ansible-control-role",
-        "arn:aws:iam::626928146778:role/kubernetes-server-role",
-        "arn:aws:iam::626928146778:role/kubernetes-agent-role"
+        "arn:aws:iam::626928146778:role/ansible-node-role",
+        "arn:aws:iam::626928146778:role/orchestrator-role",
+        "arn:aws:iam::626928146778:role/listener-node-role",
+	"arn:aws:iam::626928146778:role/kafka-node-role"
       ]
     },
     {

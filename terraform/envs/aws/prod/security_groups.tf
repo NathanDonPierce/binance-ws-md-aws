@@ -29,3 +29,53 @@ resource "aws_security_group_rule" "listeners_from_orchestrator_vxlan" {
   source_security_group_id = aws_security_group.orchestrator.id
   description              = "Flannel VXLAN from orchestrator"
 }
+
+resource "aws_security_group_rule" "kafka_from_orchestrator_vxlan" {
+  type                     = "ingress"
+  from_port                = 8472
+  to_port                  = 8472
+  protocol                 = "udp"
+  security_group_id        = aws_security_group.kafka_nodes.id
+  source_security_group_id = aws_security_group.orchestrator.id
+  description              = "Flannel VXLAN from server"
+}
+
+resource "aws_security_group_rule" "kafka_from_listeners_vxlan" {
+  type                     = "ingress"
+  from_port                = 8472
+  to_port                  = 8472
+  protocol                 = "udp"
+  security_group_id        = aws_security_group.kafka_nodes.id
+  source_security_group_id = aws_security_group.listener_nodes.id
+  description              = "Flannel VXLAN from listener nodes"
+}
+
+resource "aws_security_group_rule" "orchestrator_from_kafka_vxlan" {
+  type                     = "ingress"
+  from_port                = 8472
+  to_port                  = 8472
+  protocol                 = "udp"
+  security_group_id        = aws_security_group.orchestrator.id
+  source_security_group_id = aws_security_group.kafka_nodes.id
+  description              = "Flannel VXLAN from Kafka nodes"
+}
+
+resource "aws_security_group_rule" "orchestrator_from_kafka_api" {
+  type                     = "ingress"
+  from_port                = 6443
+  to_port                  = 6443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.orchestrator.id
+  source_security_group_id = aws_security_group.kafka_nodes.id
+  description              = "k3s API from Kafka nodes"
+}
+
+resource "aws_security_group_rule" "listener_from_kafka_vxlan" {
+  type                     = "ingress"
+  from_port                = 8472
+  to_port                  = 8472
+  protocol                 = "udp"
+  security_group_id        = aws_security_group.listener_nodes.id
+  source_security_group_id = aws_security_group.kafka_nodes.id
+  description              = "Flannel VXLAN from Kafka nodes"
+}
