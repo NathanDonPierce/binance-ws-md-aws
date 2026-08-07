@@ -1,0 +1,101 @@
+---
+- name: Deploy per-stream Binance listener DaemonSets
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
+    kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
+    listener_image: "nathandonpierce/binance-listener:0.3"
+    listener_symbol: "btcusdt"
+    kafka_bootstrap: "market-data-kafka-bootstrap.kafka.svc.cluster.local:9092"
+    listener_namespace: "listeners"
+    listener_streams:
+      - trade
+      - depth
+      - aggtrade
+
+  tasks:
+    - name: Ensure listeners namespace exists
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ listener_namespace }}"
+
+    - name: Deploy DaemonSet for each stream
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: apps/v1
+          kind: DaemonSet
+          metadata:
+            name: "listener-{{ item }}"
+            namespace: "{{ listener_namespace }}"
+            labels:
+              app: listener
+              stream: "{{ item }}"
+          spec:
+            selector:
+              matchLabels:
+                app: listener
+                stream: "{{ item }}"
+            template:
+              metadata:
+                labels:
+                  app: listener
+                  stream: "{{ item }}"
+              spec:
+                nodeSelector:
+                  role: listener
+                  stream: "{{ item }}"
+                terminationGracePeriodSeconds: 30
+                containers:
+                  - name: listener
+                    image: "{{ listener_image }}"
+                    imagePullPolicy: Always
+                    env:
+                      - name: STREAM_TYPE
+                        value: "{{ item }}"
+                      - name: SYMBOL
+                        value: "{{ listener_symbol }}"
+                      - name: KAFKA_BOOTSTRAP
+                        value: "{{ kafka_bootstrap }}"
+                      - name: SOURCE_ID
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: spec.nodeName
+                    resources:
+                      requests:
+                        cpu: "100m"
+                        memory: "128Mi"
+                      limits:
+                        cpu: "500m"
+                        memory: "256Mi"
+      loop: "{{ listener_streams }}"
+
+    - name: Wait for DaemonSet rollout on each stream
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: apps/v1
+        kind: DaemonSet
+        namespace: "{{ listener_namespace }}"
+        name: "listener-{{ item }}"
+      register: ds_status
+      until:
+        - ds_status.resources | length > 0
+        - ds_status.resources[0].status.desiredNumberScheduled | default(0) > 0
+        - ds_status.resources[0].status.numberReady | default(0) == ds_status.resources[0].status.desiredNumberScheduled
+      retries: 30
+      delay: 10
+      loop: "{{ listener_streams }}"
+
+    - name: Report deployment status
+      ansible.builtin.debug:
+        msg: "DaemonSets 'listener-trade', 'listener-depth', 'listener-aggtrade' are Ready."
+
