@@ -3,11 +3,11 @@
   hosts: localhost
   connection: local
   gather_facts: false
-
+ 
   vars:
     kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
     kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
-
+ 
   tasks:
     - name: Define the Kafka broker node pool (1 broker, ephemeral storage, on kafka nodes)
       kubernetes.core.k8s:
@@ -50,7 +50,7 @@
                               operator: In
                               values:
                                 - kafka
-
+ 
     - name: Define the Kafka cluster (KRaft mode, one plain listener on 9092)
       kubernetes.core.k8s:
         state: present
@@ -80,7 +80,7 @@
             entityOperator:
               topicOperator: {}
               userOperator: {}
-
+ 
     - name: Wait for Kafka cluster to be ready
       kubernetes.core.k8s_info:
         kubeconfig: "{{ kubeconfig_path }}"
@@ -89,13 +89,70 @@
         name: market-data
         namespace: kafka
       register: kafka_status
-      vars:
-        conditions: "{{ kafka_status.resources[0].status.conditions | default([]) }}"
-        ready_condition: "{{ conditions | selectattr('type', 'equalto', 'Ready') | list }}"
-      until: ready_condition | length > 0 and ready_condition[0].status == "True"
+      until:
+        - kafka_status.resources | length > 0
+        - kafka_status.resources[0].status.conditions | default([]) | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length > 0
       retries: 40
       delay: 15
-
-    - name: Report Kafka cluster status
+ 
+    - name: Create market-data topic (listener output, 6 partitions, 1h retention)
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: kafka.strimzi.io/v1
+          kind: KafkaTopic
+          metadata:
+            name: market-data
+            namespace: kafka
+            labels:
+              strimzi.io/cluster: market-data
+          spec:
+            partitions: 6
+            replicas: 1
+            config:
+              retention.ms: 3600000
+              cleanup.policy: delete
+              min.insync.replicas: 1   
+ 
+    - name: Create arbitration-decisions topic (reaper input, 1 partition)
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: kafka.strimzi.io/v1
+          kind: KafkaTopic
+          metadata:
+            name: arbitration-decisions
+            namespace: kafka
+            labels:
+              strimzi.io/cluster: market-data
+          spec:
+            partitions: 1
+            replicas: 1
+            config:
+              retention.ms: 3600000
+              cleanup.policy: delete
+              min.insync.replicas: 1
+ 
+    - name: Wait for both topics to be ready
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: kafka.strimzi.io/v1
+        kind: KafkaTopic
+        namespace: kafka
+        name: "{{ item }}"
+      register: topic_status
+      until:
+        - topic_status.resources | length > 0
+        - topic_status.resources[0].status.conditions | default([]) | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length > 0
+      retries: 20
+      delay: 10
+      loop:
+        - market-data
+        - arbitration-decisions
+ 
+    - name: Report deployment status
       ansible.builtin.debug:
-        msg: "Kafka cluster 'market-data' is Ready."
+        msg: "Kafka cluster 'market-data' and topics 'market-data' and 'arbitration-decisions' are Ready."
+ 
