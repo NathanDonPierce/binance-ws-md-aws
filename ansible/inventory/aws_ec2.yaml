@@ -5,9 +5,7 @@ filters:
   tag:Project: ws-project
   instance-state-name: running
 keyed_groups:
-  - key: tags.Name
-    prefix: tag
-  - key: tags.Role
+  - key: ec2_tags.Role
     prefix: tag
 compose:
-  ansible_host: "(ec2_tags.Role == 'ansible-node') | ternary(public_ip_address, private_ip_address)"
+  ansible_host: "(ec2_tags.Role == 'ansible') | ternary(public_ip_address, private_ip_address)"
