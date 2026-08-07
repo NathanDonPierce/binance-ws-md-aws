@@ -94,3 +94,25 @@
         path: "{{ playbook_dir }}/../kubeconfig/{{ inventory_hostname }}.yaml"
         regexp: 'https://127\.0\.0\.1:6443'
         replace: "https://{{ private_ip_address }}:6443"
+
+    - name: Discover any pre-existing listener/kafka instances (they hold stale CA caches)
+      delegate_to: localhost
+      become: false
+      amazon.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        filters:
+          "tag:Role":
+            - listener
+            - kafka
+          instance-state-name: running
+      register: stale_agents
+
+    - name: Terminate stale agents so ASGs relaunch them with the fresh join token
+      delegate_to: localhost
+      become: false
+      amazon.aws.ec2_instance:
+        region: "{{ aws_region }}"
+        instance_ids: "{{ stale_agents.instances | map(attribute='instance_id') | list }}"
+        state: absent
+        wait: false
+      when: stale_agents.instances | length > 0
