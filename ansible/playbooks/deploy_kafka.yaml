@@ -1,0 +1,101 @@
+---
+- name: Deploy single-broker Kafka via Strimzi
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
+    kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
+
+  tasks:
+    - name: Define the Kafka broker node pool (1 broker, ephemeral storage, on kafka nodes)
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: kafka.strimzi.io/v1
+          kind: KafkaNodePool
+          metadata:
+            name: brokers
+            namespace: kafka
+            labels:
+              strimzi.io/cluster: market-data
+          spec:
+            replicas: 1
+            roles:
+              - controller
+              - broker
+            storage:
+              type: ephemeral
+            resources:
+              requests:
+                memory: 1Gi
+                cpu: 250m
+              limits:
+                memory: 2Gi
+            template:
+              pod:
+                tolerations:
+                  - key: role
+                    operator: Equal
+                    value: kafka
+                    effect: NoSchedule
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: role
+                              operator: In
+                              values:
+                                - kafka
+
+    - name: Define the Kafka cluster (KRaft mode, one plain listener on 9092)
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: kafka.strimzi.io/v1
+          kind: Kafka
+          metadata:
+            name: market-data
+            namespace: kafka
+            annotations:
+              strimzi.io/node-pools: enabled
+              strimzi.io/kraft: enabled
+          spec:
+            kafka:
+              listeners:
+                - name: plain
+                  port: 9092
+                  type: internal
+                  tls: false
+              config:
+                offsets.topic.replication.factor: 1
+                transaction.state.log.replication.factor: 1
+                transaction.state.log.min.isr: 1
+                default.replication.factor: 1
+                min.insync.replicas: 1
+            entityOperator:
+              topicOperator: {}
+              userOperator: {}
+
+    - name: Wait for Kafka cluster to be ready
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: kafka.strimzi.io/v1
+        kind: Kafka
+        name: market-data
+        namespace: kafka
+      register: kafka_status
+      vars:
+        conditions: "{{ kafka_status.resources[0].status.conditions | default([]) }}"
+        ready_condition: "{{ conditions | selectattr('type', 'equalto', 'Ready') | list }}"
+      until: ready_condition | length > 0 and ready_condition[0].status == "True"
+      retries: 40
+      delay: 15
+
+    - name: Report Kafka cluster status
+      ansible.builtin.debug:
+        msg: "Kafka cluster 'market-data' is Ready."
