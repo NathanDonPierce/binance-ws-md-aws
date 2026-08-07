@@ -1,15 +1,15 @@
 ---
-- name: Deploy single-broker Kafka via Strimzi
+- name: Deploy 3-broker Kafka with ISR via Strimzi
   hosts: localhost
   connection: local
   gather_facts: false
- 
+
   vars:
     kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
     kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
- 
+
   tasks:
-    - name: Define the Kafka broker node pool (1 broker, ephemeral storage, on kafka nodes)
+    - name: Define the Kafka broker node pool (3 brokers, ephemeral, spread across kafka nodes)
       kubernetes.core.k8s:
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
@@ -22,7 +22,7 @@
             labels:
               strimzi.io/cluster: market-data
           spec:
-            replicas: 1
+            replicas: 3
             roles:
               - controller
               - broker
@@ -50,8 +50,14 @@
                               operator: In
                               values:
                                 - kafka
- 
-    - name: Define the Kafka cluster (KRaft mode, one plain listener on 9092)
+                  podAntiAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      - labelSelector:
+                          matchLabels:
+                            strimzi.io/pool-name: brokers
+                        topologyKey: kubernetes.io/hostname
+
+    - name: Define the Kafka cluster (KRaft, 3-broker ISR, Strimzi-managed PDB)
       kubernetes.core.k8s:
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
@@ -72,15 +78,15 @@
                   type: internal
                   tls: false
               config:
-                offsets.topic.replication.factor: 1
-                transaction.state.log.replication.factor: 1
-                transaction.state.log.min.isr: 1
-                default.replication.factor: 1
-                min.insync.replicas: 1
+                offsets.topic.replication.factor: 3
+                transaction.state.log.replication.factor: 3
+                transaction.state.log.min.isr: 2
+                default.replication.factor: 3
+                min.insync.replicas: 2
             entityOperator:
               topicOperator: {}
               userOperator: {}
- 
+
     - name: Wait for Kafka cluster to be ready
       kubernetes.core.k8s_info:
         kubeconfig: "{{ kubeconfig_path }}"
@@ -92,10 +98,10 @@
       until:
         - kafka_status.resources | length > 0
         - kafka_status.resources[0].status.conditions | default([]) | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length > 0
-      retries: 40
+      retries: 60
       delay: 15
- 
-    - name: Create market-data topic (listener output, 6 partitions, 1h retention)
+
+    - name: Create market-data topic (6 partitions, 3-replica, 1h retention)
       kubernetes.core.k8s:
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
@@ -109,13 +115,13 @@
               strimzi.io/cluster: market-data
           spec:
             partitions: 6
-            replicas: 1
+            replicas: 3
             config:
               retention.ms: 3600000
               cleanup.policy: delete
-              min.insync.replicas: 1   
- 
-    - name: Create arbitration-decisions topic (reaper input, 1 partition)
+              min.insync.replicas: 2
+
+    - name: Create arbitration-decisions topic (1 partition, 3-replica)
       kubernetes.core.k8s:
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
@@ -129,12 +135,12 @@
               strimzi.io/cluster: market-data
           spec:
             partitions: 1
-            replicas: 1
+            replicas: 3
             config:
               retention.ms: 3600000
               cleanup.policy: delete
-              min.insync.replicas: 1
- 
+              min.insync.replicas: 2
+
     - name: Wait for both topics to be ready
       kubernetes.core.k8s_info:
         kubeconfig: "{{ kubeconfig_path }}"
@@ -151,8 +157,7 @@
       loop:
         - market-data
         - arbitration-decisions
- 
+
     - name: Report deployment status
       ansible.builtin.debug:
-        msg: "Kafka cluster 'market-data' and topics 'market-data' and 'arbitration-decisions' are Ready."
- 
+        msg: "3-broker Kafka cluster with ISR and Strimzi-managed PDB is Ready. Topics 'market-data' and 'arbitration-decisions' are Ready with replication factor 3."
