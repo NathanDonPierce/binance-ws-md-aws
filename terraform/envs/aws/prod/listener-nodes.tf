@@ -1,8 +1,28 @@
-# Listener Nodes : security group, IAM, launch template, Security Group
+# Listener nodes: k3s agents dedicated to running websocket listener pods.
+# Three ASGs (Auto Scaling Groups) — one per Binance stream type (trade, depth, aggtrade).
 
+variable "listener_streams" {
+  description = "The set of Binance stream types each listener node group serves"
+  type        = set(string)
+  default     = ["trade", "depth", "aggtrade"]
+}
+
+variable "listener_count_per_stream" {
+  description = "Number of listener nodes per stream type (total nodes = count × number of streams)"
+  type        = number
+  default     = 2
+}
+
+variable "listener_instance_type" {
+  description = "EC2 instance type for listener nodes"
+  type        = string
+  default     = "t3.small"
+}
+
+# Shared security group for all listener nodes
 resource "aws_security_group" "listener_nodes" {
-  name        = "listener-node"
-  description = "listener nodes: SSH from control node, VXLAN between agents and to/from server"
+  name        = "listener-nodes"
+  description = "Listener nodes: SSH from ansible node, VXLAN between listeners"
 
   ingress {
     description     = "SSH from Ansible node"
@@ -13,7 +33,7 @@ resource "aws_security_group" "listener_nodes" {
   }
 
   ingress {
-    description = "Flannel VXLAN between agents"
+    description = "Flannel VXLAN between listener nodes"
     from_port   = 8472
     to_port     = 8472
     protocol    = "udp"
@@ -34,7 +54,7 @@ resource "aws_security_group" "listener_nodes" {
   }
 }
 
-# Agent IAM: read-only access to the k3s join token in SSM
+# Shared IAM role and instance profile: read the k3s join token from SSM
 resource "aws_iam_role" "listener_node_role" {
   name = "listener-node-role"
 
@@ -71,13 +91,14 @@ resource "aws_iam_instance_profile" "listener_node_profile" {
   role = aws_iam_role.listener_node_role.name
 }
 
+# Per-stream launch template — one per stream type, differs only in the injected stream label
 resource "aws_launch_template" "listener_node" {
-  name_prefix   = "listener-node-"
-  image_id      = var.ami_id
-  instance_type = var.agent_instance_type
-  key_name      = data.aws_key_pair.existing.key_name
+  for_each = var.listener_streams
 
-  user_data = base64encode(file("${path.module}/listener-user-data.sh"))
+  name_prefix   = "listener-${each.key}-"
+  image_id      = var.ami_id
+  instance_type = var.listener_instance_type
+  key_name      = data.aws_key_pair.existing.key_name
 
   vpc_security_group_ids = [aws_security_group.listener_nodes.id]
 
@@ -85,31 +106,39 @@ resource "aws_launch_template" "listener_node" {
     name = aws_iam_instance_profile.listener_node_profile.name
   }
 
+  user_data = base64encode(templatefile("${path.module}/listener-user-data.sh.tftpl", {
+    stream_type = each.key
+  }))
+
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name    = "listener-node"
+      Name    = "listener-${each.key}"
       Project = var.project_name
-      Role    = "ws-agent"
+      Role    = "listener"
+      Stream  = each.key
     }
   }
 }
 
+# Per-stream Auto Scaling Group — one per stream type
 resource "aws_autoscaling_group" "listener_nodes" {
-  name                = "listener-nodes"
-  desired_capacity    = var.listener_count
-  min_size            = var.listener_count
-  max_size            = var.listener_count
+  for_each = var.listener_streams
+
+  name                = "listener-${each.key}"
+  desired_capacity    = var.listener_count_per_stream
+  min_size            = var.listener_count_per_stream
+  max_size            = var.listener_count_per_stream
   vpc_zone_identifier = [data.aws_subnet.default.id]
 
   launch_template {
-    id      = aws_launch_template.listener_node.id
+    id      = aws_launch_template.listener_node[each.key].id
     version = "$Latest"
   }
 
   tag {
     key                 = "Name"
-    value               = "listener-node"
+    value               = "listener-${each.key}"
     propagate_at_launch = true
   }
 
@@ -121,9 +150,13 @@ resource "aws_autoscaling_group" "listener_nodes" {
 
   tag {
     key                 = "Role"
-    value               = "ws-agent"
+    value               = "listener"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Stream"
+    value               = each.key
     propagate_at_launch = true
   }
 }
-
-

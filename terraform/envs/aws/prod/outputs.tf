@@ -18,7 +18,7 @@ output "orchestrator_id" {
   value       = aws_instance.orchestrator.id
 }
 
-output "listener_node_asg_name" {
+output "listener_node_asg_names" {
   description = "Name of the listener nodes Auto Scaling Group"
-  value       = aws_autoscaling_group.listener_nodes.name
+  value       = { for k, v in aws_autoscaling_group.listener_nodes : k => v.name }
 }
