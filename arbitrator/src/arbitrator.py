@@ -179,7 +179,9 @@ def _publish_audit(producer: Producer, audit_message, metrics: ArbitratorMetrics
     labels = (audit_message.stream_type, audit_message.symbol)
     if isinstance(audit_message, VerdictMessage):
         metrics.verdicts_emitted.labels(
-            *labels, actionable=str(audit_message.is_actionable).lower(),
+            stream_type=audit_message.stream_type,
+            symbol=audit_message.symbol,
+            actionable=str(audit_message.is_actionable).lower(),
         ).inc()
     elif isinstance(audit_message, Tally):
         metrics.tallies_emitted.labels(*labels).inc()
@@ -241,8 +243,7 @@ def _handle_raw_message(
 def _commit(consumer: Consumer, msg):
 
     try:
-        consumer.store_offsets(message=msg)
-        consumer.commit(asynchronous=True)
+        consumer.commit(message=msg, asynchronous=True)
     except KafkaException as e:
         log.error("Failed to commit offset: %s", e)
 

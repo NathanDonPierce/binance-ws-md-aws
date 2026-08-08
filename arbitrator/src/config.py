@@ -57,7 +57,7 @@ def load():
         "window_seconds": _float("WINDOW_SECONDS", 900.0),
         "minimum_events": _int("MINIMUM_EVENTS", 100),
         "stall_warn_seconds": _float("GATE_STALL_WARN_SECONDS", 600.0),
-        "emit_tally_every": _int("EMIT_TALLY_EVERY", 500)
+        "emit_tally_every": _int("EMIT_TALLY_EVERY", 500),
         "metrics_port": _int("METRICS_PORT", 8080),
         "dedup_lag": {s: dedup_lag_for(s) for s in STREAMS},
     }
