@@ -83,19 +83,19 @@
                         containerPort: 8080
                     env:
                       - name: KAFKA_BOOTSTRAP
-                        value: "{{ kafka_bootstrap }}"
+                        value: "{{ kafka_bootstrap | string 
                       - name: SOURCES_PER_STREAM
-                        value: "{{ sources_per_stream }}"
+                        value: "{{ sources_per_stream | string 
                       - name: WINDOW_SECONDS
-                        value: "{{ window_seconds }}"
+                        value: "{{ window_seconds | string 
                       - name: MINIMUM_EVENTS
-                        value: "{{ minimum_events }}"
+                        value: "{{ minimum_events | string 
                       - name: GATE_STALL_WARN_SECONDS
-                        value: "{{ stall_warn_seconds }}"
+                        value: "{{ stall_warn_seconds | string 
                       - name: EMIT_TALLY_EVERY
-                        value: "{{ emit_tally_every }}"
+                        value: "{{ emit_tally_every | string 
                       - name: METRICS_PORT
-                        value: "{{ metrics_port }}"
+                        value: "{{ metrics_port | string 
                     resources:
                       requests:
                         memory: "256Mi"
