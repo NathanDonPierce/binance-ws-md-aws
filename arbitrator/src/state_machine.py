@@ -15,9 +15,9 @@ class StreamConfig:
     expected_sources: int
     window_seconds: float
     dedup_lag_threshold: int = 1000
-    minimum_events: int = 1
+    minimum_events: int = 100
     stall_warn_seconds: float = 600.0
-    emit_tally_every: int = 1
+    emit_tally_every: int = 500
 
     def __post_init__(self):
         if self.expected_sources < 1:

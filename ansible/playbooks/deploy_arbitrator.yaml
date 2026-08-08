@@ -1,0 +1,140 @@
+---
+- name: Deploy the arbitrator (singleton, orchestrator-pinned)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
+    kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
+
+    arbitrator_image: "nathandonpierce/binance-arbitrator:0.1"
+    arbitrator_namespace: "arbitrator"
+    kafka_bootstrap: "market-data-kafka-bootstrap.kafka.svc.cluster.local:9092"
+
+    sources_per_stream: 2
+
+    window_seconds: 120
+
+    minimum_events: 100
+
+    stall_warn_seconds: 600
+    emit_tally_every: 500
+    metrics_port: 8080
+
+  tasks:
+    - name: Create arbitrator namespace
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ arbitrator_namespace }}"
+            labels:
+              app: arbitrator
+
+    - name: Deploy the arbitrator
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: arbitrator
+            namespace: "{{ arbitrator_namespace }}"
+            labels:
+              app: arbitrator
+          spec:
+            replicas: 1
+            strategy:
+              type: Recreate
+            selector:
+              matchLabels:
+                app: arbitrator
+            template:
+              metadata:
+                labels:
+                  app: arbitrator
+              spec:
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: node-role.kubernetes.io/control-plane
+                              operator: Exists
+                tolerations:
+                  - key: node-role
+                    operator: Equal
+                    value: server
+                    effect: NoSchedule
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+                    effect: NoSchedule
+                containers:
+                  - name: arbitrator
+                    image: "{{ arbitrator_image }}"
+                    imagePullPolicy: Always
+                    ports:
+                      - name: metrics
+                        containerPort: 8080
+                    env:
+                      - name: KAFKA_BOOTSTRAP
+                        value: "{{ kafka_bootstrap }}"
+                      - name: SOURCES_PER_STREAM
+                        value: "{{ sources_per_stream }}"
+                      - name: WINDOW_SECONDS
+                        value: "{{ window_seconds }}"
+                      - name: MINIMUM_EVENTS
+                        value: "{{ minimum_events }}"
+                      - name: GATE_STALL_WARN_SECONDS
+                        value: "{{ stall_warn_seconds }}"
+                      - name: EMIT_TALLY_EVERY
+                        value: "{{ emit_tally_every }}"
+                      - name: METRICS_PORT
+                        value: "{{ metrics_port }}"
+                    resources:
+                      requests:
+                        memory: "256Mi"
+                        cpu: "100m"
+                      limits:
+                        memory: "512Mi"
+                    readinessProbe:
+                      httpGet:
+                        path: /metrics
+                        port: metrics
+                      initialDelaySeconds: 15
+                      periodSeconds: 10
+                      failureThreshold: 3
+                    livenessProbe:
+                      httpGet:
+                        path: /metrics
+                        port: metrics
+                      initialDelaySeconds: 90
+                      periodSeconds: 30
+                      failureThreshold: 3
+
+    - name: Wait for the arbitrator pod to be Ready
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: apps/v1
+        kind: Deployment
+        name: arbitrator
+        namespace: "{{ arbitrator_namespace }}"
+      register: arb_status
+      until:
+        - arb_status.resources | length > 0
+        - arb_status.resources[0].status.readyReplicas | default(0) == 1
+      retries: 30
+      delay: 5
+
+    - name: Report deployment status
+      ansible.builtin.debug:
+        msg: >-
+          Arbitrator deployed as a singleton on the orchestrator, consuming
+          from {{ kafka_bootstrap }} with {{ sources_per_stream }} sources
+          per stream and {{ window_seconds }}s windows. Metrics on
+          :{{ metrics_port }}/metrics.
