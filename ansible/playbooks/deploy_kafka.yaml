@@ -72,6 +72,18 @@
               strimzi.io/kraft: enabled
           spec:
             kafka:
+              readinessProbe:
+                initialDelaySeconds: 60
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 6
+                successThreshold: 1
+              livenessProbe:
+                initialDelaySeconds: 120
+                periodSeconds: 15
+                timeoutSeconds: 5
+                failureThreshold: 4
+                successThreshold: 1
               listeners:
                 - name: plain
                   port: 9092
