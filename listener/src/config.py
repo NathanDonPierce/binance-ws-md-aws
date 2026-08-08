@@ -1,4 +1,6 @@
-KAFKA_TOPIC = "market-data"
+KAFKA_TOPIC = "market-data-raw"
+
+TOPIC_PARTITIONS = 6
 
 BINANCE_WS_HOST = "wss://stream.binance.com:9443"
 

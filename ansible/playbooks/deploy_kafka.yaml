@@ -9,7 +9,7 @@
     kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
 
   tasks:
-    - name: Define the Kafka broker node pool (3 brokers, ephemeral, spread across kafka nodes)
+    - name: Define the Kafka broker node pool (3 brokers, ephemeral, one per node)
       kubernetes.core.k8s:
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
@@ -57,7 +57,7 @@
                             strimzi.io/pool-name: brokers
                         topologyKey: kubernetes.io/hostname
 
-    - name: Define the Kafka cluster (KRaft, 3-broker ISR, Strimzi-managed PDB)
+    - name: Define the Kafka cluster (KRaft mode, 3-broker ISR)
       kubernetes.core.k8s:
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
@@ -101,7 +101,7 @@
       retries: 60
       delay: 15
 
-    - name: Create market-data topic (6 partitions, 3-replica, 1h retention)
+    - name: Create market-data-raw topic (every source's copy, pre-arbitration)
       kubernetes.core.k8s:
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
@@ -109,7 +109,7 @@
           apiVersion: kafka.strimzi.io/v1
           kind: KafkaTopic
           metadata:
-            name: market-data
+            name: market-data-raw
             namespace: kafka
             labels:
               strimzi.io/cluster: market-data
@@ -121,7 +121,7 @@
               cleanup.policy: delete
               min.insync.replicas: 2
 
-    - name: Create arbitration-decisions topic (1 partition, 3-replica)
+    - name: Create market-data-arb topic (deduplicated feed, the product)
       kubernetes.core.k8s:
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
@@ -129,19 +129,39 @@
           apiVersion: kafka.strimzi.io/v1
           kind: KafkaTopic
           metadata:
-            name: arbitration-decisions
+            name: market-data-arb
             namespace: kafka
             labels:
               strimzi.io/cluster: market-data
           spec:
-            partitions: 1
+            partitions: 6
             replicas: 3
             config:
               retention.ms: 3600000
               cleanup.policy: delete
               min.insync.replicas: 2
 
-    - name: Wait for both topics to be ready
+    - name: Create arbitration-audit topic (tallies, verdicts, kill confirmations)
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: kafka.strimzi.io/v1
+          kind: KafkaTopic
+          metadata:
+            name: arbitration-audit
+            namespace: kafka
+            labels:
+              strimzi.io/cluster: market-data
+          spec:
+            partitions: 3
+            replicas: 3
+            config:
+              retention.ms: 3600000
+              cleanup.policy: delete
+              min.insync.replicas: 2
+
+    - name: Wait for all topics to be ready
       kubernetes.core.k8s_info:
         kubeconfig: "{{ kubeconfig_path }}"
         api_version: kafka.strimzi.io/v1
@@ -155,9 +175,13 @@
       retries: 20
       delay: 10
       loop:
-        - market-data
-        - arbitration-decisions
+        - market-data-raw
+        - market-data-arb
+        - arbitration-audit
 
     - name: Report deployment status
       ansible.builtin.debug:
-        msg: "3-broker Kafka cluster with ISR and Strimzi-managed PDB is Ready. Topics 'market-data' and 'arbitration-decisions' are Ready with replication factor 3."
+        msg: >-
+          3-broker Kafka cluster with ISR is Ready.
+          Topics market-data-raw, market-data-arb and arbitration-audit
+          are Ready with replication factor 3.
