@@ -1,0 +1,4 @@
+confluent-kafka==2.6.1
+prometheus-client==0.21.1
+kubernetes==33.1.0
+boto3==1.35.76

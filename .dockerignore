@@ -1,0 +1,9 @@
+# Everything, then re-include what each build needs. Simplest to blacklist
+# the noisy directories.
+.git/
+terraform/
+ansible/
+**/tests/
+**/__pycache__/
+**/.venv/
+**/*.pyc

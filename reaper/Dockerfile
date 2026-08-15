@@ -6,11 +6,11 @@ RUN useradd --create-home --shell /bin/bash reaper
 WORKDIR /app
 
 # Dependencies first, so the install layer caches independently of source edits.
-COPY requirements.txt .
+COPY reaper/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY common/ ./src/
-COPY arbitrator/src/ ./src/
+COPY reaper/src/ ./src/
 
 USER reaper
 

@@ -1,0 +1,260 @@
+---
+- name: Deploy the reaper (singleton, orchestrator-pinned)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
+    kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
+
+    reaper_image: "nathandonpierce/binance-reaper:0.1"
+    reaper_namespace: "reaper"
+    kafka_bootstrap: "market-data-kafka-bootstrap.kafka.svc.cluster.local:9092"
+
+    # Phase 5a defaults. Both flags off means the reaper consumes verdicts,
+    # runs every safety rail, and logs exactly what it would do — without
+    # touching the cluster or AWS.
+    #
+    #   Step 1: deploy as-is. Watch it narrate. Nothing changes.
+    #   Step 2: dry_run false, terminate false. It cordons and drains for
+    #           real; every action is undone by `kubectl uncordon`.
+    #   Step 3: terminate true. Phase 5b. Instances actually go.
+    #
+    # Do not skip to step 3. The point of the staging is that each step's
+    # worst outcome is recoverable, and the destructive one is only reached
+    # after everything upstream of it has been watched working.
+    dry_run: true
+    terminate_enabled: false
+
+    # The safety rail. Only nodes carrying this label may be removed.
+    required_node_label: "role"
+    required_node_value: "listener"
+
+    # Generous enough for a listener's SIGTERM handler to flush its Kafka
+    # producer and close its WebSocket. Must stay well below the consumer's
+    # max.poll.interval.ms (600s) or a long drain would look to the broker
+    # like a dead consumer.
+    drain_timeout_seconds: 120
+
+    metrics_port: 8080
+
+  tasks:
+    - name: Create reaper namespace
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ reaper_namespace }}"
+            labels:
+              app: reaper
+
+    - name: Create reaper ServiceAccount
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: reaper
+            namespace: "{{ reaper_namespace }}"
+
+    - name: Create reaper ClusterRole
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: reaper
+          # Deliberately minimal. Nodes are cluster-scoped so this must be a
+          # ClusterRole rather than a Role, but the verbs are only what the
+          # removal sequence actually performs.
+          rules:
+            # Read labels and providerID to check eligibility and identify the
+            # instance; patch to cordon and uncordon.
+            - apiGroups: [""]
+              resources: ["nodes"]
+              verbs: ["get", "list", "patch"]
+
+            # Find what is running on a target node.
+            - apiGroups: [""]
+              resources: ["pods"]
+              verbs: ["get", "list"]
+
+            # Evict ordinary pods. The Eviction API respects
+            # PodDisruptionBudgets, which plain deletion does not.
+            - apiGroups: [""]
+              resources: ["pods/eviction"]
+              verbs: ["create"]
+
+            # Delete DaemonSet-managed pods. The Eviction API refuses these
+            # because their controller would recreate them on the same node,
+            # and our listener pods are DaemonSet-managed — so without this
+            # verb a drain would remove nothing at all. Deletion still sends
+            # SIGTERM and still honours terminationGracePeriodSeconds, so the
+            # listener's flush-and-close handler runs either way.
+            - apiGroups: [""]
+              resources: ["pods"]
+              verbs: ["delete"]
+
+    - name: Bind the ClusterRole to the reaper ServiceAccount
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: reaper
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: reaper
+          subjects:
+            - kind: ServiceAccount
+              name: reaper
+              namespace: "{{ reaper_namespace }}"
+
+    - name: Deploy the reaper
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: reaper
+            namespace: "{{ reaper_namespace }}"
+            labels:
+              app: reaper
+          spec:
+            # One. Two reapers would need leader election to avoid both
+            # acting on the same verdict, and the whole design avoids that by
+            # simply never running two.
+            replicas: 1
+            # Recreate rather than rolling: two reapers must never overlap,
+            # even briefly during a rollout.
+            strategy:
+              type: Recreate
+            selector:
+              matchLabels:
+                app: reaper
+            template:
+              metadata:
+                labels:
+                  app: reaper
+              spec:
+                serviceAccountName: reaper
+                # Pinned to the orchestrator for the same reason as the
+                # arbitrator: a reaper on a listener node could be asked to
+                # terminate the node it is running on. It would survive —
+                # Kubernetes reschedules it — but the half-finished kill and
+                # the confusing logs are avoidable.
+                #
+                # nodeAffinity with Exists rather than nodeSelector: k3s sets
+                # the control-plane label to an empty string, and nodeSelector
+                # matches on exact value equality, which would leave the pod
+                # Pending forever.
+                affinity:
+                  nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                      nodeSelectorTerms:
+                        - matchExpressions:
+                            - key: node-role.kubernetes.io/control-plane
+                              operator: Exists
+                tolerations:
+                  - key: node-role
+                    operator: Equal
+                    value: server
+                    effect: NoSchedule
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+                    effect: NoSchedule
+                containers:
+                  - name: reaper
+                    image: "{{ reaper_image }}"
+                    # Always pull during iteration — a rebuild under the same
+                    # tag would otherwise not reach the pod.
+                    imagePullPolicy: Always
+                    ports:
+                      - name: metrics
+                        # Literal, not templated: the schema requires an int
+                        # here and a Jinja '{{ var }}' renders as a string.
+                        containerPort: 8080
+                    env:
+                      # Every value needs | string. These vars are typed, and
+                      # Ansible passes native types straight through, which
+                      # the API rejects for env values.
+                      - name: KAFKA_BOOTSTRAP
+                        value: "{{ kafka_bootstrap | string }}"
+                      - name: DRY_RUN
+                        value: "{{ dry_run | string | lower }}"
+                      - name: TERMINATE_ENABLED
+                        value: "{{ terminate_enabled | string | lower }}"
+                      - name: REQUIRED_NODE_LABEL
+                        value: "{{ required_node_label | string }}"
+                      - name: REQUIRED_NODE_VALUE
+                        value: "{{ required_node_value | string }}"
+                      - name: DRAIN_TIMEOUT_SECONDS
+                        value: "{{ drain_timeout_seconds | string }}"
+                      - name: METRICS_PORT
+                        value: "{{ metrics_port | string }}"
+                    resources:
+                      requests:
+                        memory: "128Mi"
+                        cpu: "50m"
+                      limits:
+                        # Smaller than the arbitrator's: the reaper holds no
+                        # dedup cache and no per-window state, just a set of
+                        # source ids it has already acted on.
+                        memory: "256Mi"
+                    # /metrics answers as soon as the HTTP server is up, which
+                    # happens before the consumer loop starts. A failing probe
+                    # therefore means the process died rather than 'still
+                    # warming up'.
+                    readinessProbe:
+                      httpGet:
+                        path: /metrics
+                        port: metrics
+                      initialDelaySeconds: 15
+                      periodSeconds: 10
+                      failureThreshold: 3
+                    # Loose initial delay: Python cold start plus importing
+                    # confluent-kafka's C extension, the kubernetes client and
+                    # boto3 can take a while on a fresh pod, and a tight
+                    # liveness probe would kill it before it ever ran.
+                    livenessProbe:
+                      httpGet:
+                        path: /metrics
+                        port: metrics
+                      initialDelaySeconds: 90
+                      periodSeconds: 30
+                      failureThreshold: 3
+
+    - name: Wait for the reaper pod to be Ready
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: apps/v1
+        kind: Deployment
+        name: reaper
+        namespace: "{{ reaper_namespace }}"
+      register: reaper_status
+      until:
+        - reaper_status.resources | length > 0
+        - reaper_status.resources[0].status.readyReplicas | default(0) == 1
+      retries: 30
+      delay: 5
+
+    - name: Report deployment status
+      ansible.builtin.debug:
+        msg: >-
+          Reaper deployed as a singleton on the orchestrator.
+          dry_run={{ dry_run }}, terminate_enabled={{ terminate_enabled }}.
+          Only nodes labelled {{ required_node_label }}={{ required_node_value }}
+          may be removed. Metrics on :{{ metrics_port }}/metrics.
