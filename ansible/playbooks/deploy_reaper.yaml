@@ -24,7 +24,7 @@
     # Do not skip to step 3. The point of the staging is that each step's
     # worst outcome is recoverable, and the destructive one is only reached
     # after everything upstream of it has been watched working.
-    dry_run: true
+    dry_run: false
     terminate_enabled: false
 
     # The safety rail. Only nodes carrying this label may be removed.

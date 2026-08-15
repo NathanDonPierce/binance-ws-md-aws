@@ -68,21 +68,13 @@ log = logging.getLogger("reaper")
 
 def _build_consumer(bootstrap: str):
     """Consumer for the audit topic.
-
-    auto.offset.reset=latest because verdicts predating the reaper have been
-    superseded: the arbitrator issues a fresh one every window, so replaying
-    history would act on stale instructions about a fleet that has since
-    changed.
     """
     return Consumer({
         "bootstrap.servers": bootstrap,
         "group.id": config.CONSUMER_GROUP,
-        "auto.offset.reset": "latest",
+        "auto.offset.reset": "earliest",
         "enable.auto.commit": False,
         "session.timeout.ms": 45000,
-        # A kill takes a drain's worth of time, during which the loop is not
-        # polling. This must comfortably exceed the drain timeout or the
-        # broker will decide the consumer has died and rebalance mid-kill.
         "max.poll.interval.ms": 600000,
     })
 
