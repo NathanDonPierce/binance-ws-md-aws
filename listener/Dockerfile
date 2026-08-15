@@ -5,10 +5,11 @@ FROM python:3.12-slim
 RUN useradd --create-home --shell /bin/bash listener
 WORKDIR /app
 
-COPY requirements.txt .
+COPY listener/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/ ./src/
+COPY common/ ./src/
+COPY listener/src/ ./src/
 
 USER listener
 
