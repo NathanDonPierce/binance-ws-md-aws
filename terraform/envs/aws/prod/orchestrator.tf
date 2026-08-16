@@ -86,6 +86,33 @@ resource "aws_instance" "orchestrator" {
   }
 }
 
+resource "aws_iam_role_policy" "orchestrator_reaper_policy" {
+  name = "reaper-terminate-listeners"
+  role = aws_iam_role.orchestrator_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "DescribeAnyInstance"
+        Effect   = "Allow"
+        Action   = "ec2:DescribeInstances"
+        Resource = "*"
+      },
+      {
+        Sid      = "TerminateListenersOnly"
+        Effect   = "Allow"
+        Action   = "ec2:TerminateInstances"
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Role" = "listener"
+          }
+        }
+      },
+    ]
+  })
+}
+
 resource "aws_ssm_parameter" "k3s_server_ip" {
   name  = "/binance-ws/k3s-server-ip"
   type  = "String"

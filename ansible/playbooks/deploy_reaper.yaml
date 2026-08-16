@@ -25,7 +25,7 @@
     # worst outcome is recoverable, and the destructive one is only reached
     # after everything upstream of it has been watched working.
     dry_run: false
-    terminate_enabled: false
+    terminate_enabled: true
 
     # The safety rail. Only nodes carrying this label may be removed.
     required_node_label: "role"
@@ -40,6 +40,16 @@
     metrics_port: 8080
 
   tasks:
+    - name: Get region from instance metadata
+      ansible.builtin.uri:
+        url: http://169.254.169.254/latest/meta-data/placement/region
+        return_content: true
+      register: region_result
+
+    - name: Set region fact
+      ansible.builtin.set_fact:
+        aws_region: "{{ region_result.content }}"
+
     - name: Create reaper namespace
       kubernetes.core.k8s:
         state: present
@@ -205,6 +215,8 @@
                         value: "{{ drain_timeout_seconds | string }}"
                       - name: METRICS_PORT
                         value: "{{ metrics_port | string }}"
+                      - name: AWS_REGION
+                        value: "{{ aws_region }}"
                     resources:
                       requests:
                         memory: "128Mi"
