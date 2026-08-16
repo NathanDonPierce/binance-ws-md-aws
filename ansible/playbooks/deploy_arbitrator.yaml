@@ -14,9 +14,9 @@
 
     sources_per_stream: 2
 
-    window_seconds: 120
+    window_seconds: 1200
 
-    minimum_events: 100
+    minimum_events: 1000
 
     stall_warn_seconds: 600
     emit_tally_every: 500
