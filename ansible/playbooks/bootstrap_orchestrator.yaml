@@ -13,7 +13,14 @@
         name:
           - container-selinux
           - unzip
+          - python3-pip
         state: present
+
+    - name: Install Python libraries for Ansible modules
+      ansible.builtin.pip:
+        name:
+          - kubernetes
+        extra_args: --break-system-packages
 
     - name: Install AWS CLI v2
       ansible.builtin.shell: |

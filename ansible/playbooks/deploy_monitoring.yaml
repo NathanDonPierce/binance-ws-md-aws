@@ -1,0 +1,268 @@
+---
+- name: Deploy Grafana Alloy — scrape annotated pods, forward to Grafana Cloud
+  hosts: tag_orchestrator
+  become: true
+  gather_facts: false
+
+  vars:
+    monitoring_namespace: "monitoring"
+    alloy_image: "grafana/alloy:v1.5.1"
+
+    ssm_url_param: "/binance-ws/grafana-cloud-url"
+    ssm_user_param: "/binance-ws/grafana-cloud-user"
+    ssm_token_param: "/binance-ws/grafana-cloud-token"
+    aws_region: "ap-northeast-1"
+
+    kubeconfig_path: "/etc/rancher/k3s/k3s.yaml"
+
+  tasks:
+    - name: Read remote-write URL from SSM
+      ansible.builtin.command: >
+        aws ssm get-parameter
+        --name {{ ssm_url_param }}
+        --region {{ aws_region }}
+        --query Parameter.Value --output text
+      register: gc_url_raw
+      changed_when: false
+
+    - name: Read user ID from SSM
+      ansible.builtin.command: >
+        aws ssm get-parameter
+        --name {{ ssm_user_param }}
+        --region {{ aws_region }}
+        --query Parameter.Value --output text
+      register: gc_user_raw
+      changed_when: false
+
+    - name: Read API token from SSM (decrypted)
+      ansible.builtin.command: >
+        aws ssm get-parameter
+        --name {{ ssm_token_param }}
+        --with-decryption
+        --region {{ aws_region }}
+        --query Parameter.Value --output text
+      register: gc_token_raw
+      changed_when: false
+      no_log: true
+
+    - name: Create monitoring namespace
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ monitoring_namespace }}"
+            labels:
+              app: alloy
+
+    - name: Create Grafana Cloud credentials Secret
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: grafana-cloud-credentials
+            namespace: "{{ monitoring_namespace }}"
+          type: Opaque
+          stringData:
+            GRAFANA_CLOUD_URL: "{{ gc_url_raw.stdout }}"
+            GRAFANA_CLOUD_USER: "{{ gc_user_raw.stdout }}"
+            GRAFANA_CLOUD_TOKEN: "{{ gc_token_raw.stdout }}"
+      no_log: true
+
+    - name: Create Alloy config ConfigMap
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: alloy-config
+            namespace: "{{ monitoring_namespace }}"
+          data:
+            config.alloy: "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/alloy-config.alloy') }}"
+
+    - name: Create Alloy ServiceAccount
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: alloy
+            namespace: "{{ monitoring_namespace }}"
+
+    - name: Create Alloy ClusterRole
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: alloy
+          rules:
+            - apiGroups: [""]
+              resources: ["pods", "services", "endpoints", "nodes", "namespaces"]
+              verbs: ["get", "list", "watch"]
+            - apiGroups: [""]
+              resources: ["nodes/metrics", "nodes/proxy"]
+              verbs: ["get"]
+            - nonResourceURLs: ["/metrics"]
+              verbs: ["get"]
+
+    - name: Bind the ClusterRole to Alloy
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: alloy
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: alloy
+          subjects:
+            - kind: ServiceAccount
+              name: alloy
+              namespace: "{{ monitoring_namespace }}"
+
+    - name: Deploy Alloy DaemonSet
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: apps/v1
+          kind: DaemonSet
+          metadata:
+            name: alloy
+            namespace: "{{ monitoring_namespace }}"
+            labels:
+              app: alloy
+          spec:
+            selector:
+              matchLabels:
+                app: alloy
+            template:
+              metadata:
+                labels:
+                  app: alloy
+                annotations:
+                  prometheus.io/scrape: "true"
+                  prometheus.io/port: "12345"
+                  prometheus.io/path: "/metrics"
+              spec:
+                serviceAccountName: alloy
+                tolerations:
+                  # Kafka nodes
+                  - key: role
+                    operator: Equal
+                    value: kafka
+                    effect: NoSchedule
+                  # Orchestrator (custom taint)
+                  - key: node-role
+                    operator: Equal
+                    value: server
+                    effect: NoSchedule
+                  # Orchestrator (k3s default control-plane taint)
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+                    effect: NoSchedule
+                  # Belt-and-braces so a future taint does not create a
+                  # silent observability gap.
+                  - operator: Exists
+                    effect: NoSchedule
+                containers:
+                  - name: alloy
+                    image: "{{ alloy_image }}"
+                    args:
+                      - run
+                      - /etc/alloy/config.alloy
+                      - --server.http.listen-addr=0.0.0.0:12345
+                      - --storage.path=/var/lib/alloy/data
+                    ports:
+                      - name: http
+                        containerPort: 12345
+                    env:
+                      - name: GRAFANA_CLOUD_URL
+                        valueFrom:
+                          secretKeyRef:
+                            name: grafana-cloud-credentials
+                            key: GRAFANA_CLOUD_URL
+                      - name: GRAFANA_CLOUD_USER
+                        valueFrom:
+                          secretKeyRef:
+                            name: grafana-cloud-credentials
+                            key: GRAFANA_CLOUD_USER
+                      - name: GRAFANA_CLOUD_TOKEN
+                        valueFrom:
+                          secretKeyRef:
+                            name: grafana-cloud-credentials
+                            key: GRAFANA_CLOUD_TOKEN
+                      - name: HOSTNAME
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: spec.nodeName
+                    volumeMounts:
+                      - name: config
+                        mountPath: /etc/alloy
+                      - name: data
+                        mountPath: /var/lib/alloy/data
+                    resources:
+                      requests:
+                        memory: "128Mi"
+                        cpu: "50m"
+                      limits:
+                        memory: "384Mi"
+                    readinessProbe:
+                      httpGet:
+                        path: /-/ready
+                        port: http
+                      initialDelaySeconds: 10
+                      periodSeconds: 10
+                    livenessProbe:
+                      httpGet:
+                        path: /-/healthy
+                        port: http
+                      initialDelaySeconds: 30
+                      periodSeconds: 30
+                volumes:
+                  - name: config
+                    configMap:
+                      name: alloy-config
+                  - name: data
+                    emptyDir: {}
+
+    - name: Wait for Alloy DaemonSet to be Ready on every node
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: apps/v1
+        kind: DaemonSet
+        name: alloy
+        namespace: "{{ monitoring_namespace }}"
+      register: alloy_status
+      until:
+        - alloy_status.resources | length > 0
+        - alloy_status.resources[0].status.numberReady | default(0) ==
+          alloy_status.resources[0].status.desiredNumberScheduled | default(0)
+        - alloy_status.resources[0].status.desiredNumberScheduled | default(0) > 0
+      retries: 30
+      delay: 5
+
+    - name: Report deployment status
+      ansible.builtin.debug:
+        msg: >-
+          Alloy deployed as a DaemonSet across all
+          {{ alloy_status.resources[0].status.numberReady }} nodes.
+          Discovering pods annotated with prometheus.io/scrape=true and
+          forwarding metrics to Grafana Cloud. Use `kubectl port-forward -n
+          monitoring ds/alloy 12345:12345` from the ansible node to inspect
+          the components page.
