@@ -18,7 +18,7 @@
   tasks:
     - name: Read remote-write URL from SSM
       ansible.builtin.command: >
-        aws ssm get-parameter
+        /usr/local/bin/aws ssm get-parameter
         --name {{ ssm_url_param }}
         --region {{ aws_region }}
         --query Parameter.Value --output text
@@ -27,7 +27,7 @@
 
     - name: Read user ID from SSM
       ansible.builtin.command: >
-        aws ssm get-parameter
+        /usr/local/bin/aws ssm get-parameter
         --name {{ ssm_user_param }}
         --region {{ aws_region }}
         --query Parameter.Value --output text
@@ -36,7 +36,7 @@
 
     - name: Read API token from SSM (decrypted)
       ansible.builtin.command: >
-        aws ssm get-parameter
+        /usr/local/bin/aws ssm get-parameter
         --name {{ ssm_token_param }}
         --with-decryption
         --region {{ aws_region }}

@@ -159,18 +159,12 @@
               metadata:
                 labels:
                   app: reaper
+                annotations:
+                  prometheus.io/scrape: "true"
+                  prometheus.io/port: "8080"
+                  prometheus.io/path: "/metrics"
               spec:
                 serviceAccountName: reaper
-                # Pinned to the orchestrator for the same reason as the
-                # arbitrator: a reaper on a listener node could be asked to
-                # terminate the node it is running on. It would survive —
-                # Kubernetes reschedules it — but the half-finished kill and
-                # the confusing logs are avoidable.
-                #
-                # nodeAffinity with Exists rather than nodeSelector: k3s sets
-                # the control-plane label to an empty string, and nodeSelector
-                # matches on exact value equality, which would leave the pod
-                # Pending forever.
                 affinity:
                   nodeAffinity:
                     requiredDuringSchedulingIgnoredDuringExecution:
