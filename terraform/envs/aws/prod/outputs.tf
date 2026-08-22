@@ -8,9 +8,9 @@ output "ansible_node_ssh_command" {
   value       = "ssh -i ~/.ssh/${var.key_pair_name}.pem ${var.ssh_user}@${aws_instance.ansible_node.public_ip}"
 }
 
-output "orchestrator_public_ip" {
-  description = "Public IP of the orchestrator node (not directly reachable — only via the Ansible node)"
-  value       = aws_instance.orchestrator.public_ip
+output "orchestrator_private_ip" {
+  description = "Private IP of the orchestrator node (k3s API, SSH via Ansible jump host)"
+  value       = aws_instance.orchestrator.private_ip
 }
 
 output "orchestrator_id" {
