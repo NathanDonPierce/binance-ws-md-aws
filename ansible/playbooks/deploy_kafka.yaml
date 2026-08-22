@@ -36,6 +36,11 @@
                 memory: 2Gi
             template:
               pod:
+                metadata:
+                  annotations:
+                    prometheus.io/scrape: "true"
+                    prometheus.io/port: "9404"
+                    prometheus.io/path: "/metrics"
                 tolerations:
                   - key: role
                     operator: Equal
@@ -68,7 +73,7 @@
             name: kafka-metrics
             namespace: kafka
           data:
-            kafka-metrics-config.yml: "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/kafka-metrics-config.yml') }}"
+            kafka-metrics-config.yaml: "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/kafka-metrics-config.yaml') }}"
 
     - name: Define the Kafka cluster (KRaft mode, 3-broker ISR)
       kubernetes.core.k8s:
@@ -108,22 +113,15 @@
                 transaction.state.log.min.isr: 2
                 default.replication.factor: 3
                 min.insync.replicas: 2
+              metricsConfig:
+                type: jmxPrometheusExporter
+                valueFrom:
+                  configMapKeyRef:
+                    name: kafka-metrics
+                    key: kafka-metrics-config.yaml
             entityOperator:
               topicOperator: {}
               userOperator: {}
-            metricsConfig:
-              type: jmxPrometheusExporter
-              valueFrom:
-                configMapKeyRef:
-                  name: kafka-metrics
-                  key: kafka-metrics-config.yml
-            template:
-              pod:
-                metadata:
-                  annotations:
-                    prometheus.io/scrape: "true"
-                    prometheus.io/port: "9404"
-                    prometheus.io/path: "/metrics"
 
     - name: Wait for Kafka cluster to be ready
       kubernetes.core.k8s_info:

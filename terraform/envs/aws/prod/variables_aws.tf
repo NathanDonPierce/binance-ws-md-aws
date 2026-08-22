@@ -6,13 +6,13 @@ variable "aws_region" {
 
 
 variable "server_instance_type" {
-  description = "EC2 instance type for the k3s server node"
+  description = "EC2 instance type for the orchestrator and kafka node"
   type        = string
   default     = "c7i-flex.large"
 }
 
 variable "agent_instance_type" {
-  description = "EC2 instance type for k3s agent nodes"
+  description = "EC2 instance type for listener nodes"
   type        = string
   default     = "t3.small"
 }
