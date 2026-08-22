@@ -46,7 +46,7 @@ discovery.relabel "annotated_pods" {
 prometheus.scrape "pods" {
   targets         = discovery.relabel.annotated_pods.output
   forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
-  scrape_interval = "15s"
+  scrape_interval = "60s"
   scrape_timeout  = "10s"
 }
 
