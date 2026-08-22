@@ -57,6 +57,19 @@
                             strimzi.io/pool-name: brokers
                         topologyKey: kubernetes.io/hostname
 
+    - name: Create Kafka metrics ConfigMap
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: kafka-metrics
+            namespace: kafka
+          data:
+            kafka-metrics-config.yml: "{{ lookup('ansible.builtin.file', playbook_dir + '/../files/kafka-metrics-config.yml') }}"
+
     - name: Define the Kafka cluster (KRaft mode, 3-broker ISR)
       kubernetes.core.k8s:
         state: present
@@ -98,6 +111,19 @@
             entityOperator:
               topicOperator: {}
               userOperator: {}
+            metricsConfig:
+              type: jmxPrometheusExporter
+              valueFrom:
+                configMapKeyRef:
+                  name: kafka-metrics
+                  key: kafka-metrics-config.yml
+            template:
+              pod:
+                metadata:
+                  annotations:
+                    prometheus.io/scrape: "true"
+                    prometheus.io/port: "9404"
+                    prometheus.io/path: "/metrics"
 
     - name: Wait for Kafka cluster to be ready
       kubernetes.core.k8s_info:
