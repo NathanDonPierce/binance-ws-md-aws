@@ -10,7 +10,7 @@ variable "listener_streams" {
 variable "listener_count_per_stream" {
   description = "Number of listener nodes per stream type (total nodes = count × number of streams)"
   type        = number
-  default     = 7
+  default     = 5
 }
 
 variable "listener_instance_type" {
