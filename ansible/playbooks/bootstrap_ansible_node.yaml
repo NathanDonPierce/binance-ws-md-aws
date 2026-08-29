@@ -53,3 +53,15 @@
         dest: /home/ec2-user/binance-ws
         version: main
       become: false
+
+    - name: Enable EPEL repository
+      ansible.builtin.dnf:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm
+        state: present
+        disable_gpg_check: true
+
+    - name: Install ad-hoc debugging tools
+      ansible.builtin.dnf:
+        name:
+          - kcat
+        state: present

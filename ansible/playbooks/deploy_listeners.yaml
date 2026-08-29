@@ -13,8 +13,8 @@
     listener_namespace: "listeners"
     listener_streams:
       - trade
-      - depth
-      - aggtrade
+    #   - depth
+    #   - aggtrade
 
   tasks:
     - name: Ensure listeners namespace exists
@@ -97,5 +97,5 @@
 
     - name: Report deployment status
       ansible.builtin.debug:
-        msg: "DaemonSets 'listener-trade', 'listener-depth', 'listener-aggtrade' are Ready."
+        msg: "DaemonSets ready for streams: {{ listener_streams | join(', ') }}."
 

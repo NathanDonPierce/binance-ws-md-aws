@@ -4,7 +4,7 @@
 variable "listener_streams" {
   description = "The set of Binance stream types each listener node group serves"
   type        = set(string)
-  default     = ["trade", "depth", "aggtrade"]
+  default     = ["trade"]
 }
 
 variable "listener_count_per_stream" {

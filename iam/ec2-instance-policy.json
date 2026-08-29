@@ -123,7 +123,7 @@
         "arn:aws:iam::626928146778:role/ansible-node-role",
         "arn:aws:iam::626928146778:role/orchestrator-role",
         "arn:aws:iam::626928146778:role/listener-node-role",
-	"arn:aws:iam::626928146778:role/kafka-node-role"
+	      "arn:aws:iam::626928146778:role/kafka-node-role"
       ]
     },
     {
