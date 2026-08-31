@@ -141,8 +141,8 @@ class StateSnapshotCollector:
         )
         source_wins = GaugeMetricFamily(
             "arbitrator_source_wins",
-            "Wins credited to each source in the currently open window",
-            labels=["stream_type", "symbol", "source_id"],
+            "Wins credited to each source",
+            labels=["stream_type", "symbol", "source_id", "mode"],
         )
         ignored = GaugeMetricFamily(
             "arbitrator_sources_ignored",
@@ -169,7 +169,11 @@ class StateSnapshotCollector:
 
             for source_id, wins in machine.counts.items():
                 source_wins.add_metric(
-                    [stream_type, symbol, source_id], float(wins),
+                    [stream_type, symbol, source_id, "offset"], float(wins),
+                )
+            for source_id, wins in machine.counts_timestamp.items():
+                source_wins.add_metric(
+                    [stream_type, symbol, source_id, "timestamp"], float(wins),
                 )
 
         yield gate_open

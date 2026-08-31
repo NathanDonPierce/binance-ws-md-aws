@@ -45,6 +45,8 @@ class StreamArbitrator:
             lag_threshold=config.dedup_lag_threshold,
         )
         self._tally = WindowTally()
+        self._tally_timestamp = WindowTally()
+
         self._gate = FleetGate(
             expected_sources=config.expected_sources,
             stall_warn_seconds=config.stall_warn_seconds,
@@ -72,12 +74,16 @@ class StreamArbitrator:
         return dict(self._tally.counts)
 
     @property
+    def counts_timestamp(self):
+        return dict(self._tally_timestamp.counts)
+
+    @property
     def ignored_sources(self):
         return self._gate.ignored_sources
 
     # -- main entry points --------------------------------------------------
 
-    def handle_message(self, key: str, source_id: str, now: float):
+    def handle_message(self, key: str, source_id: str, listener_timestamp_ns: int, now: float):
         outcome = Outcome()
 
         if self._gate.is_ignored(source_id):
@@ -87,14 +93,16 @@ class StreamArbitrator:
         if gate_opened:
             self._open_window(now)
 
-        forward, evictions = self._dedup.observe(key, source_id)
+        forward, evictions = self._dedup.observe(key, source_id, listener_timestamp_ns)
         outcome.forward = forward
 
         if self._gate.is_open:
             self._tally.register_source(source_id)
+            self._tally_timestamp.register_source(source_id)
 
             for eviction in evictions:
                 self._tally.credit(eviction.winner)
+                self._tally_timestamp.credit(eviction.winner_timestamp)
                 self._events_since_tally += 1
 
             if self._events_since_tally >= self.config.emit_tally_every:
@@ -138,10 +146,12 @@ class StreamArbitrator:
     def _open_window(self, now: float):
         self._window_start = now
         self._tally.reset()
+        self._tally_timestamp.reset()
         self._events_since_tally = 0
 
         for source_id in self._gate.confirmed_sources:
             self._tally.register_source(source_id)
+            self._tally_timestamp.register_source(source_id)
 
     def _close_window(self, now: float):
         verdict = self._tally.verdict(minimum_events=self.config.minimum_events)

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 class Eviction:
     key: str
     winner: str
+    winner_timestamp: str
     copies_seen: int
     complete: bool
  
@@ -15,6 +16,8 @@ class Eviction:
 @dataclass
 class _Entry:
     winner: str
+    winner_timestamp_source: str     # source with smallest ts seen so far
+    winner_timestamp_ns: int         # smallest timestamp
     sources: set[str]
     admitted_at_sequence: int
  
@@ -42,7 +45,7 @@ class DedupCache:
         """Number of distinct keys admitted over this cache's lifetime."""
         return self._sequence
  
-    def observe(self, key: str, source_id: str):
+    def observe(self, key: str, source_id: str, listener_timestamp_ns: int):
         evictions: list[Eviction] = []
  
         existing = self._entries.get(key)
@@ -52,6 +55,8 @@ class DedupCache:
             self._sequence += 1
             self._entries[key] = _Entry(
                 winner=source_id,
+                winner_timestamp_source=source_id,
+                winner_timestamp_ns=listener_timestamp_ns,
                 sources={source_id},
                 admitted_at_sequence=self._sequence,
             )
@@ -67,6 +72,9 @@ class DedupCache:
  
             if source_id not in existing.sources:
                 existing.sources.add(source_id)
+                if listener_timestamp_ns < existing.winner_timestamp_ns:
+                    existing.winner_timestamp_source = source_id
+                    existing.winner_timestamp_ns = listener_timestamp_ns
                 if len(existing.sources) >= self.expected_copies:
                     evictions.append(self._evict(key, complete=True))
  
@@ -78,6 +86,7 @@ class DedupCache:
         return Eviction(
             key=key,
             winner=entry.winner,
+            winner_timestamp=entry.winner_timestamp_source,
             copies_seen=len(entry.sources),
             complete=complete,
         )

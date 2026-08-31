@@ -198,6 +198,7 @@ def _handle_raw_message(
     stream_type = _header_value(msg.headers(), "stream_type")
     symbol = _header_value(msg.headers(), "symbol")
     source_id = _header_value(msg.headers(), "source_id")
+    listener_ts_ns_raw = _header_value(msg.headers(), "listener_ts_ns")
 
     if not (stream_type and symbol and source_id):
         log.warning(
@@ -206,8 +207,18 @@ def _handle_raw_message(
         )
         metrics.raw_messages_dropped.labels(reason="missing_header").inc()
         return
-
     key = msg.key().decode("utf-8") if msg.key() else None
+
+    try:
+        listener_ts_ns = int(listener_ts_ns_raw)
+    except (ValueError, TypeError):
+        log.warning(
+            "Raw message has invalid listener_ts_ns header — dropping. partition=%d offset=%d value=%r",
+            msg.partition(), msg.offset(), listener_ts_ns_raw,
+        )
+        metrics.raw_messages_dropped.labels(reason="invalid_ts_header").inc()
+        return
+
     if not key:
         log.warning(
             "Raw message missing key — dropping. partition=%d offset=%d",
@@ -224,7 +235,7 @@ def _handle_raw_message(
 
     was_ignored = source_id in machine.ignored_sources
 
-    outcome = machine.handle_message(key=key, source_id=source_id, now=now)
+    outcome = machine.handle_message(key=key, source_id=source_id, listener_timestamp_ns=listener_ts_ns, now=now)
 
     if was_ignored:
         metrics.messages_ignored.labels(stream_type, symbol).inc()
