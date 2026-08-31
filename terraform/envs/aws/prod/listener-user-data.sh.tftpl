@@ -36,3 +36,15 @@ curl -sfL https://get.k3s.io | \
   K3S_TOKEN="$${TOKEN}" \
   INSTALL_K3S_EXEC="agent --node-label role=listener --node-label stream=${stream_type}" \
   sh -
+
+# Verify PTP device exists
+ls /dev/ptp* || { echo "No PTP device; ENA driver may be too old"; exit 1; }
+
+# Configure chrony to use PTP hardware clock
+cat >> /etc/chrony.conf <<EOF
+
+# PTP Hardware Clock via AWS Nitro
+refclock PHC /dev/ptp0 poll 0 dpoll -2 offset 0 stratum 1
+EOF
+
+systemctl restart chronyd

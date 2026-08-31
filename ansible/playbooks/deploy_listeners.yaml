@@ -7,7 +7,7 @@
   vars:
     kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
     kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
-    listener_image: "nathandonpierce/binance-listener:0.4"
+    listener_image: "nathandonpierce/binance-listener:0.5"
     listener_symbol: "btcusdt"
     kafka_bootstrap: "market-data-kafka-bootstrap.kafka.svc.cluster.local:9092"
     listener_namespace: "listeners"

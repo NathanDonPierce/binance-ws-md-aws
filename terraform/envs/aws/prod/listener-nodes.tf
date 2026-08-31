@@ -10,13 +10,13 @@ variable "listener_streams" {
 variable "listener_count_per_stream" {
   description = "Number of listener nodes per stream type (total nodes = count × number of streams)"
   type        = number
-  default     = 5
+  default     = 3
 }
 
 variable "listener_instance_type" {
   description = "EC2 instance type for listener nodes"
   type        = string
-  default     = "t3.small"
+  default     = "c7i.large"
 }
 
 # Shared security group for all listener nodes
@@ -101,6 +101,10 @@ resource "aws_launch_template" "listener_node" {
   key_name      = data.aws_key_pair.existing.key_name
 
   vpc_security_group_ids = [aws_security_group.listener_nodes.id]
+
+  placement {
+    group_name = aws_placement_group.listeners_ptp.name
+  }
 
   iam_instance_profile {
     name = aws_iam_instance_profile.listener_node_profile.name

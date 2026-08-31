@@ -134,6 +134,7 @@ async def _consume_and_produce(
                             ("source_id", source_id.encode("utf-8")),
                             ("stream_type", stream_type.encode("utf-8")),
                             ("symbol", symbol.encode("utf-8")),
+                            ("listener_ts_ns", str(time.time_ns()).encode("utf-8")),
                         ],
                         callback=_on_delivery,
                     )
