@@ -8,7 +8,7 @@
     kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
     kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
 
-    reaper_image: "nathandonpierce/binance-reaper:0.2"
+    reaper_image: "nathandonpierce/binance-reaper:0.3"
     reaper_namespace: "reaper"
     kafka_bootstrap: "market-data-kafka-bootstrap.kafka.svc.cluster.local:9092"
 
