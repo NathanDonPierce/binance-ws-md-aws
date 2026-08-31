@@ -16,7 +16,7 @@ variable "listener_count_per_stream" {
 variable "listener_instance_type" {
   description = "EC2 instance type for listener nodes"
   type        = string
-  default     = "c7i.large"
+  default     = "c7i-flex.large"
 }
 
 # Shared security group for all listener nodes
