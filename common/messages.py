@@ -50,6 +50,7 @@ class Tally:
     emitted_at: float
     counts: dict[str, int]
     total_events: int
+    mode: str = "offset"
     correlation_id: str | None = None
 
     def __post_init__(self):

@@ -106,7 +106,7 @@ class StreamArbitrator:
                 self._events_since_tally += 1
 
             if self._events_since_tally >= self.config.emit_tally_every:
-                outcome.audit.append(self._build_tally(now))
+                outcome.audit.extend(self._build_tally(now))
                 self._events_since_tally = 0
 
         stall = self._gate.check_stall(now)
@@ -170,14 +170,26 @@ class StreamArbitrator:
         return message
 
     def _build_tally(self, now: float):
-        return Tally(
-            stream_type=self.config.stream_type,
-            symbol=self.config.symbol,
-            window_start=self._window_start,
-            emitted_at=now,
-            counts=dict(self._tally.counts),
-            total_events=self._tally.total_events,
-        )
+        return [
+            Tally(
+                stream_type=self.config.stream_type,
+                symbol=self.config.symbol,
+                window_start=self._window_start,
+                emitted_at=now,
+                counts=dict(self._tally.counts),
+                total_events=self._tally.total_events,
+                mode="offset",
+            ),
+            Tally(
+                stream_type=self.config.stream_type,
+                symbol=self.config.symbol,
+                window_start=self._window_start,
+                emitted_at=now,
+                counts=dict(self._tally_timestamp.counts),
+                total_events=self._tally_timestamp.total_events,
+                mode="timestamp",
+            )
+        ]
 
     def _build_stall(self, stall, now: float):
         return GateStalled(
