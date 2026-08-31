@@ -34,6 +34,11 @@ variable "ami_id" {
   type        = string
 }
 
+variable "listener_ami_id" {
+  description = "AMI ID for Amazon Linux OS in the target region - needed for PTP"
+  type        = string
+}
+
 variable "aws_profile" {
   description = "AWS CLI profile to use."
   type        = string

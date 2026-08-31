@@ -20,6 +20,7 @@ import logging
 import os
 import signal
 import sys
+import time
 
 import websockets
 from confluent_kafka import Producer, KafkaException

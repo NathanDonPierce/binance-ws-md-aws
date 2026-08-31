@@ -6,7 +6,8 @@ TOKEN_PARAM="/binance-ws/k3s-join-token"
 SERVER_IP_PARAM="/binance-ws/k3s-server-ip"
 
 # --- Kernel modules, pinned to the RUNNING kernel ---
-dnf install -y "kernel-modules-extra-$(uname -r)"
+dnf install -y "kernel-modules-extra-$(uname -r)" 2>/dev/null  || true
+
 modprobe overlay
 modprobe br_netfilter
 modprobe vxlan
@@ -37,6 +38,21 @@ curl -sfL https://get.k3s.io | \
   INSTALL_K3S_EXEC="agent --node-label role=listener --node-label stream=${stream_type}" \
   sh -
 
+# --- Enable PTP hardware clock in ENA driver ---
+echo "options ena phc_enable=1" > /etc/modprobe.d/ena-phc.conf
+
+# Reload the ENA driver to pick up the parameter (kills network briefly, then reconnects)
+rmmod ena 2>/dev/null || true
+modprobe ena
+
+# Wait for PTP device to appear
+for i in 1 2 3 4 5; do
+    if ls /dev/ptp* 2>/dev/null; then
+        break
+    fi
+    sleep 2
+done
+
 # Verify PTP device exists
 ls /dev/ptp* || { echo "No PTP device; ENA driver may be too old"; exit 1; }
 
@@ -44,7 +60,7 @@ ls /dev/ptp* || { echo "No PTP device; ENA driver may be too old"; exit 1; }
 cat >> /etc/chrony.conf <<EOF
 
 # PTP Hardware Clock via AWS Nitro
-refclock PHC /dev/ptp0 poll 0 dpoll -2 offset 0 stratum 1
+refclock PHC /dev/ptp0 poll 0 dpoll -2 offset 0 stratum 0 prefer
 EOF
 
 systemctl restart chronyd

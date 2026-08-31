@@ -10,7 +10,7 @@ variable "listener_streams" {
 variable "listener_count_per_stream" {
   description = "Number of listener nodes per stream type (total nodes = count × number of streams)"
   type        = number
-  default     = 3
+  default     = 10
 }
 
 variable "listener_instance_type" {
@@ -96,7 +96,7 @@ resource "aws_launch_template" "listener_node" {
   for_each = var.listener_streams
 
   name_prefix   = "listener-${each.key}-"
-  image_id      = var.ami_id
+  image_id      = var.listener_ami_id
   instance_type = var.listener_instance_type
   key_name      = data.aws_key_pair.existing.key_name
 
