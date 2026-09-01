@@ -36,7 +36,7 @@ AWS ASG (Auto Scaling Groups):
 - Used to maintain a minimum k kafka nodes and l listener nodes (default to 3 kafka nodes and 15 listener nodes (5 nodes per stream * 3 streams))
 
 Ansible:
-- Used to  the ansible control node, then bootstraps k3s on the orchestrator and deploys Kafka, the arbitrator, the reaper, and monitoring to the cluster
+- Used to configure the ansible control node, then bootstraps k3s on the orchestrator and deploys Kafka, the arbitrator, the reaper, and monitoring to the cluster
 
 ## Architecture
 
