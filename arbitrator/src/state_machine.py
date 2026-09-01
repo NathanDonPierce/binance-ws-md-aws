@@ -157,7 +157,7 @@ class StreamArbitrator:
             self._tally_timestamp.register_source(source_id)
 
     def _close_window(self, now: float):
-        verdict = self._tally.verdict(minimum_events=self.config.minimum_events)
+        verdict = self._tally_timestamp.verdict(minimum_events=self.config.minimum_events)
         message = VerdictMessage(
             stream_type=self.config.stream_type,
             symbol=self.config.symbol,
