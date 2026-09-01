@@ -33,6 +33,7 @@ from prometheus_client import (
     CollectorRegistry,
     Counter,
     Gauge,
+    Histogram,
     start_http_server,
 )
 from prometheus_client.core import GaugeMetricFamily
@@ -97,6 +98,13 @@ class ArbitratorMetrics:
         self.kill_confirmations_received = Counter(
             "arbitrator_kill_confirmations_received_total",
             "kill_confirmed messages consumed from arbitration-audit",
+            labelnames=("stream_type", "symbol"),
+            registry=self.registry,
+        )
+        self.winning_latency = Histogram(
+            "arbitrator_winning_latency_microseconds",
+            "listener timestamp latency histogram",
+            buckets=(1000, 2000, 3000, 5000, 8000, 10000, 15000, 20000, 30000, 50000, 75000, 100000, 250000, 500000, 1000000, 2500000),
             labelnames=("stream_type", "symbol"),
             registry=self.registry,
         )

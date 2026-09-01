@@ -199,6 +199,7 @@ def _handle_raw_message(
     symbol = _header_value(msg.headers(), "symbol")
     source_id = _header_value(msg.headers(), "source_id")
     listener_ts_ns_raw = _header_value(msg.headers(), "listener_ts_ns")
+    binance_ts_ns_raw = _header_value(msg.headers(), "binance_ts_ns")
 
     if not (stream_type and symbol and source_id):
         log.warning(
@@ -219,6 +220,16 @@ def _handle_raw_message(
         metrics.raw_messages_dropped.labels(reason="invalid_ts_header").inc()
         return
 
+    try:
+        binance_ts_ns = int(binance_ts_ns_raw)
+    except (ValueError, TypeError):
+        log.warning(
+            "Raw message has invalid binance_ts_ns header — dropping. partition=%d offset=%d value=%r",
+            msg.partition(), msg.offset(), binance_ts_ns_raw,
+        )
+        metrics.raw_messages_dropped.labels(reason="invalid_binance_ts_header").inc()
+        return
+
     if not key:
         log.warning(
             "Raw message missing key — dropping. partition=%d offset=%d",
@@ -235,7 +246,7 @@ def _handle_raw_message(
 
     was_ignored = source_id in machine.ignored_sources
 
-    outcome = machine.handle_message(key=key, source_id=source_id, listener_timestamp_ns=listener_ts_ns, now=now)
+    outcome = machine.handle_message(key=key, source_id=source_id, listener_timestamp_ns=listener_ts_ns, binance_timestamp_ns=binance_ts_ns, now=now)
 
     if was_ignored:
         metrics.messages_ignored.labels(stream_type, symbol).inc()
@@ -248,6 +259,10 @@ def _handle_raw_message(
     for audit in outcome.audit:
         _publish_audit(producer, audit, metrics)
 
+    for eviction in outcome.evictions:
+        latency_ns = eviction.winner_timestamp_ns - eviction.winner_timestamp_binance_ns
+        if latency_ns >= 0:
+            metrics.winning_latency.labels(stream_type, symbol).observe(latency_ns / 1e3)
 
 # --- Main loops -----------------------------------------------------------
 

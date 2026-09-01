@@ -1,0 +1,9 @@
+---
+- import_playbook: bootstrap.yaml
+- import_playbook: bootstrap_orchestrator.yaml
+- import_playbook: deploy_strimzi.yaml
+- import_playbook: deploy_kafka.yaml
+- import_playbook: deploy_listeners.yaml
+- import_playbook: deploy_arbitrator.yaml
+- import_playbook: deploy_reaper.yaml
+- import_playbook: deploy_monitoring.yaml

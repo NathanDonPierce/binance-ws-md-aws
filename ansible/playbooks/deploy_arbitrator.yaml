@@ -8,7 +8,7 @@
     kubeconfig_dir: "{{ playbook_dir | dirname }}/kubeconfig"
     kubeconfig_path: "{{ query('ansible.builtin.fileglob', kubeconfig_dir + '/*.yaml') | first }}"
 
-    arbitrator_image: "nathandonpierce/binance-arbitrator:0.2"
+    arbitrator_image: "nathandonpierce/binance-arbitrator:0.3"
     arbitrator_namespace: "arbitrator"
     kafka_bootstrap: "market-data-kafka-bootstrap.kafka.svc.cluster.local:9092"
 

@@ -76,7 +76,7 @@ def _build_producer(bootstrap: str, log):
 
 def _build_ws_url(stream_type: str, symbol: str):
     binance_name = STREAMS[stream_type]["binance_name"]
-    return f"{BINANCE_WS_HOST}/ws/{symbol}@{binance_name}"
+    return f"{BINANCE_WS_HOST}/ws/{symbol}@{binance_name}?timeUnit=MICROSECOND"
 
 
 def _build_message_key(stream_type: str, event: dict):
@@ -125,6 +125,12 @@ async def _consume_and_produce(
                     log.warning("Event missing its id field, dropping: %s", raw[:200])
                     continue
 
+                if stream_type in ("trade", "aggTrade"):
+                    binance_ts_us = int(event["T"])
+                else:  # depth
+                    binance_ts_us = int(event["E"])
+                binance_ts_ns = binance_ts_us * 1000
+
                 try:
                     producer.produce(
                         topic=KAFKA_TOPIC,
@@ -136,6 +142,7 @@ async def _consume_and_produce(
                             ("stream_type", stream_type.encode("utf-8")),
                             ("symbol", symbol.encode("utf-8")),
                             ("listener_ts_ns", str(time.time_ns()).encode("utf-8")),
+                            ("binance_ts_ns", str(binance_ts_ns).encode("utf-8")),
                         ],
                         callback=_on_delivery,
                     )

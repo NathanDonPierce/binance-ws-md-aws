@@ -33,6 +33,7 @@ class Outcome:
     forward: bool = False
     audit: list = field(default_factory=list)
     kill_target: str | None = None
+    evictions: list = field(default_factory=list)
 
 
 class StreamArbitrator:
@@ -83,7 +84,7 @@ class StreamArbitrator:
 
     # -- main entry points --------------------------------------------------
 
-    def handle_message(self, key: str, source_id: str, listener_timestamp_ns: int, now: float):
+    def handle_message(self, key: str, source_id: str, listener_timestamp_ns: int, binance_timestamp_ns: int, now: float):
         outcome = Outcome()
 
         if self._gate.is_ignored(source_id):
@@ -93,7 +94,7 @@ class StreamArbitrator:
         if gate_opened:
             self._open_window(now)
 
-        forward, evictions = self._dedup.observe(key, source_id, listener_timestamp_ns)
+        forward, evictions = self._dedup.observe(key, source_id, listener_timestamp_ns, binance_timestamp_ns)
         outcome.forward = forward
 
         if self._gate.is_open:
@@ -104,6 +105,8 @@ class StreamArbitrator:
                 self._tally.credit(eviction.winner)
                 self._tally_timestamp.credit(eviction.winner_timestamp)
                 self._events_since_tally += 1
+
+                outcome.evictions.append(eviction)
 
             if self._events_since_tally >= self.config.emit_tally_every:
                 outcome.audit.extend(self._build_tally(now))

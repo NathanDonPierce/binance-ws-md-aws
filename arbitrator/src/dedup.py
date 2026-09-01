@@ -9,6 +9,8 @@ class Eviction:
     key: str
     winner: str
     winner_timestamp: str
+    winner_timestamp_ns: int
+    winner_timestamp_binance_ns: int
     copies_seen: int
     complete: bool
  
@@ -16,8 +18,9 @@ class Eviction:
 @dataclass
 class _Entry:
     winner: str
-    winner_timestamp_source: str     # source with smallest ts seen so far
-    winner_timestamp_ns: int         # smallest timestamp
+    winner_timestamp_source: str
+    winner_timestamp_ns: int
+    winner_timestamp_binance_ns: int
     sources: set[str]
     admitted_at_sequence: int
  
@@ -45,7 +48,7 @@ class DedupCache:
         """Number of distinct keys admitted over this cache's lifetime."""
         return self._sequence
  
-    def observe(self, key: str, source_id: str, listener_timestamp_ns: int):
+    def observe(self, key: str, source_id: str, listener_timestamp_ns: int, binance_timestamp_ns: int):
         evictions: list[Eviction] = []
  
         existing = self._entries.get(key)
@@ -57,6 +60,7 @@ class DedupCache:
                 winner=source_id,
                 winner_timestamp_source=source_id,
                 winner_timestamp_ns=listener_timestamp_ns,
+                winner_timestamp_binance_ns=binance_timestamp_ns,
                 sources={source_id},
                 admitted_at_sequence=self._sequence,
             )
@@ -75,6 +79,7 @@ class DedupCache:
                 if listener_timestamp_ns < existing.winner_timestamp_ns:
                     existing.winner_timestamp_source = source_id
                     existing.winner_timestamp_ns = listener_timestamp_ns
+                    existing.winner_timestamp_binance_ns = binance_timestamp_ns
                 if len(existing.sources) >= self.expected_copies:
                     evictions.append(self._evict(key, complete=True))
  
@@ -87,6 +92,8 @@ class DedupCache:
             key=key,
             winner=entry.winner,
             winner_timestamp=entry.winner_timestamp_source,
+            winner_timestamp_ns=entry.winner_timestamp_ns,
+            winner_timestamp_binance_ns=entry.winner_timestamp_binance_ns,
             copies_seen=len(entry.sources),
             complete=complete,
         )
