@@ -12,7 +12,7 @@
     arbitrator_namespace: "arbitrator"
     kafka_bootstrap: "market-data-kafka-bootstrap.kafka.svc.cluster.local:9092"
 
-    sources_per_stream: 10
+    sources_per_stream: 7
 
     window_seconds: 1200
 
