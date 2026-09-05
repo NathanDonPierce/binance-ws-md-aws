@@ -68,11 +68,10 @@ def _build_producer(bootstrap: str, log):
         "acks": "all",
         "enable.idempotence": True,
         "retries": 5,
-        "linger.ms": 5,
+        "linger.ms": 0,
+        # Nagle disabled so the packet leaves as soon as librdkafka writes it.
+        "socket.nagle.disable": True,
     })
-
-
-# --- Core loop --------------------------------------------------------------
 
 def _build_ws_url(stream_type: str, symbol: str):
     binance_name = STREAMS[stream_type]["binance_name"]
@@ -102,8 +101,6 @@ async def _consume_and_produce(
     log.info("Connecting to %s", url)
 
     def _on_delivery(err, msg):
-        # Only failures are reported. Successes are implied by their absence
-        # and confirmed by the flush at shutdown.
         if err is not None:
             log.error("Delivery failed for key=%s: %s", msg.key(), err)
 
@@ -111,6 +108,7 @@ async def _consume_and_produce(
         log.info("WebSocket connected")
         try:
             async for raw in ws:
+                received_ns = time.time_ns()
                 if stop_event.is_set():
                     return
 
@@ -141,15 +139,12 @@ async def _consume_and_produce(
                             ("source_id", source_id.encode("utf-8")),
                             ("stream_type", stream_type.encode("utf-8")),
                             ("symbol", symbol.encode("utf-8")),
-                            ("listener_ts_ns", str(time.time_ns()).encode("utf-8")),
+                            ("listener_ts_ns", str(received_ns).encode("utf-8")),
                             ("binance_ts_ns", str(binance_ts_ns).encode("utf-8")),
                         ],
                         callback=_on_delivery,
                     )
                 except BufferError:
-                    # The producer's local queue is bounded. Drain it and drop
-                    # this event rather than blocking the WebSocket read, which
-                    # would build back-pressure all the way to Binance.
                     log.warning("Producer queue full, draining and dropping one event")
                     producer.poll(1.0)
                     continue
