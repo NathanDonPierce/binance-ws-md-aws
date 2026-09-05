@@ -33,7 +33,7 @@
                 memory: 1Gi
                 cpu: 250m
               limits:
-                memory: 2Gi
+                memory: 3Gi
             template:
               pod:
                 metadata:
