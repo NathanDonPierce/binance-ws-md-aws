@@ -79,3 +79,23 @@ resource "aws_security_group_rule" "listener_from_kafka_vxlan" {
   source_security_group_id = aws_security_group.kafka_nodes.id
   description              = "Flannel VXLAN from Kafka nodes"
 }
+
+resource "aws_security_group_rule" "listener_kubelet_from_orchestrator" {
+  type                     = "ingress"
+  from_port                = 10250
+  to_port                  = 10250
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.listener_nodes.id
+  source_security_group_id = aws_security_group.orchestrator.id
+  description              = "Kubelet API access from orchestrator (for metrics-server)"
+}
+
+resource "aws_security_group_rule" "kafka_kubelet_from_orchestrator" {
+  type                     = "ingress"
+  from_port                = 10250
+  to_port                  = 10250
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.kafka_nodes.id
+  source_security_group_id = aws_security_group.orchestrator.id
+  description              = "Kubelet API access from orchestrator (for metrics-server)"
+}
