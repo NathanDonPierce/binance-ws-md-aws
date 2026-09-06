@@ -300,16 +300,11 @@ def _raw_consumer_loop(
         try:
             _handle_raw_message(msg, registry, producer, metrics)
         except Exception:
-            # A single bad message must not take the loop down. Log with
-            # enough detail to reproduce, then move on and commit past it —
-            # otherwise the same message is re-polled forever.
             log.exception(
                 "Failed to handle raw message partition=%d offset=%d",
                 msg.partition(), msg.offset(),
             )
 
-        # Commit after processing so a crash re-reads whatever was in flight.
-        # See _commit for why the try/except is largely defensive.
         _commit(consumer, msg)
 
         producer.poll(0)

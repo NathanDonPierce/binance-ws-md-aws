@@ -12,7 +12,7 @@ AUDIT_PARTITIONS = 3
 
 CONSUMER_GROUP = "arbitrator"
 
-_DEFAULT_DEDUP_LAG = 1000
+_DEFAULT_DEDUP_LAG = 10000
 
 STREAMS = ("trade", "depth", "aggtrade")
 

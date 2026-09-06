@@ -29,6 +29,12 @@ class StreamConfig:
 
 
 @dataclass
+'''
+forward: first copy of the event is forwarded to market-data-arb
+audit: Tally, VerdictMessage, or GateStalled is encoded
+kill_target: actionable verdict
+evictions: provides latency metrics 
+'''
 class Outcome:
     forward: bool = False
     audit: list = field(default_factory=list)

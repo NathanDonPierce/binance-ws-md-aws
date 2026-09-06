@@ -32,18 +32,12 @@ TYPE_VERDICT = "verdict"
 TYPE_GATE_STALLED = "gate_stalled"
 TYPE_KILL_CONFIRMED = "kill_confirmed"
 
-# Bumped when a field changes meaning or is removed. Consumers can refuse to
-# act on a version they do not understand rather than misreading a field.
 SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
 class Tally:
-    """Running win counts for an open window.
-
-    Emitted as wins accrue. High volume by design — one per arbitrated event —
-    so it carries only what is needed to reconstruct how a verdict was reached.
-    """
+    # Running win counts for an open window.
     stream_type: str
     symbol: str
     window_start: float
@@ -54,10 +48,7 @@ class Tally:
     correlation_id: str | None = None
 
     def __post_init__(self):
-        # frozen=True stops the field being rebound but not the dict being
-        # mutated in place. Copying on construction means a caller that keeps
-        # a reference to the dict it passed in cannot alter a message that has
-        # already been handed off for publishing.
+        # frozen=True stops the field being rebound but not the dict being mutated in place.
         object.__setattr__(self, "counts", dict(self.counts))
 
     def to_dict(self):
@@ -88,14 +79,7 @@ class Tally:
 
 @dataclass(frozen=True)
 class VerdictMessage:
-    """The outcome of a closed window. The only type the reaper acts on.
-
-    `slowest_source_id` is None when the window reached no conclusion — too few
-    sources contributed, too few events were arbitrated, or two sources tied on
-    the lowest count. `reason` explains which. A verdict with no source is still
-    published, because "this window decided nothing, and here is why" is
-    information worth having in the audit record.
-    """
+    # The outcome (slowest_source_id) of a closed window. The only type the reaper acts on.
     stream_type: str
     symbol: str
     window_start: float
@@ -108,12 +92,11 @@ class VerdictMessage:
     correlation_id: str | None = None
 
     def __post_init__(self):
-        # See Tally.__post_init__ — frozen does not make the dict immutable.
         object.__setattr__(self, "counts", dict(self.counts))
 
     @property
     def is_actionable(self):
-        """True if this verdict names a source for the reaper to remove."""
+        # True if this verdict names a source for the reaper to remove.
         return self.slowest_source_id is not None
 
     def to_dict(self):
@@ -150,14 +133,7 @@ class VerdictMessage:
 
 @dataclass(frozen=True)
 class GateStalled:
-    """Measurement has been held shut longer than the warning interval.
-
-    The gate never proceeds on a short fleet, so a stall lasts as long as the
-    fleet stays short — a replacement that crash-loops and never publishes
-    would hold a stream shut indefinitely. This message exists so that state is
-    visible rather than silent, and repeats at the warning interval for as long
-    as the condition holds.
-    """
+    # Emitted when the gate has not been re-opened after GATE_STALL_WARN_SECONDS.
     stream_type: str
     symbol: str
     sources_confirmed: int
@@ -194,17 +170,7 @@ class GateStalled:
 
 @dataclass(frozen=True)
 class KillConfirmed:
-    """The reaper has terminated a source. Published by the reaper.
-
-    Closes the loop opened by a verdict. The arbitrator ignores a source from
-    the moment it names it, so this does not change gating; it records the
-    difference between 'named for removal' and 'confirmed gone'. A source that
-    stays named but never confirmed means the reaper did not finish its work.
-
-    `instance_id` is the EC2 instance identifier rather than only the node
-    name. Node names derive from private IP addresses, which AWS recycles, so
-    the instance id is the durable identity of what was actually terminated.
-    """
+    # The reaper has terminated a source. Published by the reaper.
     stream_type: str
     symbol: str
     source_id: str
@@ -250,20 +216,8 @@ def encode(message):
 
 
 def decode(raw):
-    """Deserialise an audit message.
+    # Deserialise an audit message.
 
-    Returns None for a message this build does not understand — an unknown
-    `type`, or a newer `schema_version`. Returning None rather than raising
-    lets a consumer skip messages meant for a different component, which is
-    the normal case on a shared topic: the reaper sees three types it has no
-    interest in for every verdict it acts on.
-
-    Raises:
-        ValueError: if the payload is not valid JSON, is not an object, has no
-            `type` field, or is missing a field its type requires. These are
-            malformed messages rather than unrecognised ones, and are worth
-            surfacing.
-    """
     if isinstance(raw, (bytes, bytearray)):
         raw = raw.decode("utf-8")
 

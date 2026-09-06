@@ -31,11 +31,6 @@ from dataclasses import dataclass, field
 @dataclass(frozen=True)
 class StallWarning:
     """Emitted when the gate has been closed longer than the warning interval.
-
-    The gate never proceeds on a short fleet, so a stall is indefinite by
-    design — a replacement that crash-loops and never publishes would hold
-    measurement forever. This warning exists so that the stall is visible in
-    the audit topic rather than silent.
     """
     sources_confirmed: int
     sources_expected: int
