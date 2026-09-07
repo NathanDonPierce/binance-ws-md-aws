@@ -33,6 +33,17 @@
         wait: true
         wait_timeout: 5m
         kubeconfig: "{{ kubeconfig_path }}"
+        values:
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: "true"
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+            - key: node-role
+              operator: Equal
+              value: server
+              effect: NoSchedule
 
     - name: Confirm the operator pod is running
       kubernetes.core.k8s_info:
