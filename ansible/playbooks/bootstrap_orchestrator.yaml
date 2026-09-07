@@ -94,13 +94,50 @@
         dest: "{{ playbook_dir }}/../kubeconfig/{{ inventory_hostname }}.yaml"
         flat: true
 
-    - name: Rewrite kubeconfig server address for remote access
-      delegate_to: localhost
-      become: false
-      ansible.builtin.replace:
-        path: "{{ playbook_dir }}/../kubeconfig/{{ inventory_hostname }}.yaml"
-        regexp: 'https://127\.0\.0\.1:6443'
-        replace: "https://{{ private_ip_address }}:6443"
+    - name: Wait for metrics-server to exist
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        kind: Deployment
+        namespace: kube-system
+        name: metrics-server
+      register: metrics_server
+      until: metrics_server.resources | length > 0
+      retries: 30
+      delay: 10    
+      
+    - name: Patch metrics-server (idempotent)
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        merge_type: strategic-merge
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: metrics-server
+            namespace: kube-system
+          spec:
+            template:
+              spec:
+                nodeSelector:
+                  node-role.kubernetes.io/control-plane: "true"
+                tolerations:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+                    effect: NoSchedule
+                  - key: node-role
+                    operator: Equal
+                    value: server
+                    effect: NoSchedule
+                containers:
+                  - name: metrics-server
+                    args:
+                      - --cert-dir=/tmp
+                      - --secure-port=10250
+                      - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+                      - --kubelet-use-node-status-port
+                      - --metric-resolution=15s
+                      - --kubelet-insecure-tls
 
     - name: Discover any pre-existing listener/kafka instances (they hold stale CA caches)
       delegate_to: localhost
